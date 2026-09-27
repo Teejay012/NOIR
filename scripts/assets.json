@@ -1,0 +1,41 @@
+{
+  "_note": "Generated with Higgsfield (images: GPT Image 2.5, models: Tripo H3.1 image-to-3D). Run: npm run assets",
+  "images": {
+    "n01": "https://d8j0ntlcm91z4.cloudfront.net/user_3E4aC5gSRF4DinvQCUJBbOppkSB/hf_20260927_142136_1075ad2e-32c8-41ec-896d-9abf85848345.png",
+    "n02": "https://d8j0ntlcm91z4.cloudfront.net/user_3E4aC5gSRF4DinvQCUJBbOppkSB/hf_20260927_142254_ce3dddd3-201f-4627-8bb8-8bfd69b984b8.png",
+    "n03": "https://d8j0ntlcm91z4.cloudfront.net/user_3E4aC5gSRF4DinvQCUJBbOppkSB/hf_20260927_142136_5439d12a-412e-48fb-b358-5aa5735d47ec.png",
+    "f01": "https://d8j0ntlcm91z4.cloudfront.net/user_3E4aC5gSRF4DinvQCUJBbOppkSB/hf_20260927_142136_9e524aa6-81fc-4ecb-90ff-5152780de9a2.png",
+    "f02": "https://d8j0ntlcm91z4.cloudfront.net/user_3E4aC5gSRF4DinvQCUJBbOppkSB/hf_20260927_142136_67c2f877-1cfb-4466-bff1-71326d75cea6.png",
+    "f03": "https://d8j0ntlcm91z4.cloudfront.net/user_3E4aC5gSRF4DinvQCUJBbOppkSB/hf_20260927_142136_f6197d1c-9cea-4119-b4c4-10878d8873a4.png",
+    "o01": "https://d8j0ntlcm91z4.cloudfront.net/user_3E4aC5gSRF4DinvQCUJBbOppkSB/hf_20260927_142136_15fc75bb-d6eb-4e88-8380-8ba0ca0df24a.png",
+    "o02": "https://d8j0ntlcm91z4.cloudfront.net/user_3E4aC5gSRF4DinvQCUJBbOppkSB/hf_20260927_142255_e81be53d-5fa7-45ee-bd08-86f930e4a95e.png",
+    "o03": "https://d8j0ntlcm91z4.cloudfront.net/user_3E4aC5gSRF4DinvQCUJBbOppkSB/hf_20260927_142136_5ae14b4b-a06a-4f30-ba8e-78005f25b439.png",
+    "d01": "https://d8j0ntlcm91z4.cloudfront.net/user_3E4aC5gSRF4DinvQCUJBbOppkSB/hf_20260927_142136_3dbcdb9a-6d06-4f9e-9467-c6284f1d042e.png",
+    "d02": "https://d8j0ntlcm91z4.cloudfront.net/user_3E4aC5gSRF4DinvQCUJBbOppkSB/hf_20260927_142255_bcbcc859-fc32-4453-aa57-47e48b5b06b8.png",
+    "d03": "https://d8j0ntlcm91z4.cloudfront.net/user_3E4aC5gSRF4DinvQCUJBbOppkSB/hf_20260927_142255_60b8b3f3-191c-454a-8d19-b1fe0dd02bdc.png",
+    "a01": "https://d8j0ntlcm91z4.cloudfront.net/user_3E4aC5gSRF4DinvQCUJBbOppkSB/hf_20260927_142332_d4632569-f2e2-459c-b708-1c8feb6dff85.png",
+    "a02": "https://d8j0ntlcm91z4.cloudfront.net/user_3E4aC5gSRF4DinvQCUJBbOppkSB/hf_20260927_142333_082ff625-e253-49aa-96fe-012c0f5eb65c.png",
+    "a03": "https://d8j0ntlcm91z4.cloudfront.net/user_3E4aC5gSRF4DinvQCUJBbOppkSB/hf_20260927_142331_6182dfb5-2d5a-44ff-b497-87e54c6b4d96.png",
+    "macro-material": "https://d8j0ntlcm91z4.cloudfront.net/user_3E4aC5gSRF4DinvQCUJBbOppkSB/hf_20260927_142331_6f384515-c330-49f0-b508-b45244a113dd.png",
+    "macro-sole": "https://d8j0ntlcm91z4.cloudfront.net/user_3E4aC5gSRF4DinvQCUJBbOppkSB/hf_20260927_142434_759c9236-64b5-4014-8478-bb6cdfc47e82.png",
+    "macro-detail": "https://d8j0ntlcm91z4.cloudfront.net/user_3E4aC5gSRF4DinvQCUJBbOppkSB/hf_20260927_142433_45246e51-4615-4fb7-b52e-600c322741e6.png",
+    "hall": "https://d8j0ntlcm91z4.cloudfront.net/user_3E4aC5gSRF4DinvQCUJBbOppkSB/hf_20260927_142433_f70091c4-c315-47ff-b8c0-8554263dc21c.png"
+  },
+  "models": {
+    "n01": "https://d8j0ntlcm91z4.cloudfront.net/user_3E4aC5gSRF4DinvQCUJBbOppkSB/hf_20260927_142335_65f5389d-e2ae-4158-820d-17c6c7e8035a.glb",
+    "n02": "https://d8j0ntlcm91z4.cloudfront.net/user_3E4aC5gSRF4DinvQCUJBbOppkSB/hf_20260927_142341_78ef65ce-1ad1-4a76-aa35-91b6407fd586.glb",
+    "n03": "https://d8j0ntlcm91z4.cloudfront.net/user_3E4aC5gSRF4DinvQCUJBbOppkSB/hf_20260927_142345_61d612f3-80d7-4b58-bab5-5adc88e78883.glb",
+    "f01": "https://d8j0ntlcm91z4.cloudfront.net/user_3E4aC5gSRF4DinvQCUJBbOppkSB/hf_20260927_142348_cba85b41-c85e-4323-9065-47afb6e88fe8.glb",
+    "f02": "https://d8j0ntlcm91z4.cloudfront.net/user_3E4aC5gSRF4DinvQCUJBbOppkSB/hf_20260927_142351_be49a8c2-31b2-4cb1-8b46-fb5ed12371dc.glb",
+    "f03": "https://d8j0ntlcm91z4.cloudfront.net/user_3E4aC5gSRF4DinvQCUJBbOppkSB/hf_20260927_142353_2fd70beb-cd5b-41f8-8344-b21c86f683a5.glb",
+    "o01": "https://d8j0ntlcm91z4.cloudfront.net/user_3E4aC5gSRF4DinvQCUJBbOppkSB/hf_20260927_142358_eef185f7-c6ba-4e71-888e-e4c4c81f03eb.glb",
+    "o02": "https://d8j0ntlcm91z4.cloudfront.net/user_3E4aC5gSRF4DinvQCUJBbOppkSB/hf_20260927_142404_e62e05f7-cc99-4ebf-85a5-96313449cd79.glb",
+    "o03": "https://d8j0ntlcm91z4.cloudfront.net/user_3E4aC5gSRF4DinvQCUJBbOppkSB/hf_20260927_142407_156ab808-96d4-4b50-a58e-ad60e35ee505.glb",
+    "d01": "https://d8j0ntlcm91z4.cloudfront.net/user_3E4aC5gSRF4DinvQCUJBbOppkSB/hf_20260927_142410_7dc15bd3-47aa-436d-8248-01267ae6e96e.glb",
+    "d02": "https://d8j0ntlcm91z4.cloudfront.net/user_3E4aC5gSRF4DinvQCUJBbOppkSB/hf_20260927_142414_fc76e116-f7bb-4db6-beb0-7fdc219fea05.glb",
+    "d03": "https://d8j0ntlcm91z4.cloudfront.net/user_3E4aC5gSRF4DinvQCUJBbOppkSB/hf_20260927_142418_c8d66f2f-fce4-4164-a25f-ba37d01689f4.glb",
+    "a01": "https://d8j0ntlcm91z4.cloudfront.net/user_3E4aC5gSRF4DinvQCUJBbOppkSB/hf_20260927_142424_79f77b36-963e-478e-b858-3823c74fd828.glb",
+    "a02": "https://d8j0ntlcm91z4.cloudfront.net/user_3E4aC5gSRF4DinvQCUJBbOppkSB/hf_20260927_142428_26d73f5d-5326-442e-947c-51a0d085a7ab.glb",
+    "a03": "https://d8j0ntlcm91z4.cloudfront.net/user_3E4aC5gSRF4DinvQCUJBbOppkSB/hf_20260927_142430_b920438d-7e87-408e-ada1-40e3c26d7a65.glb"
+  }
+}

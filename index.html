@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#050505" />
+    <title>NOIR — The Store That You Explore</title>
+    <meta name="description" content="NOIR — Shopping, reimagined as an experience. Don't browse the store. Enter it." />
+    <meta property="og:title" content="NOIR — The Store That You Explore" />
+    <meta property="og:description" content="Shopping, reimagined as an experience." />
+    <meta property="og:image" content="/assets/img/hall.webp" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23050505'/%3E%3Cpath d='M9 23V9l14 14V9' stroke='%23ece9e3' stroke-width='2' fill='none'/%3E%3C/svg%3E" />
+  </head>
+  <body class="is-arriving">
+    <canvas id="gl" aria-label="The NOIR showroom"></canvas>
+
+    <!-- 01 — THE ARRIVAL -->
+    <section id="arrival" aria-live="polite">
+      <p class="arrival-line" data-line="1"></p>
+      <p class="arrival-line" data-line="2"></p>
+      <div class="arrival-foot">
+        <span class="mono arrival-progress">000</span>
+        <button class="enter" type="button" disabled>
+          <span>ENTER STORE</span>
+          <span class="enter-arrow" aria-hidden="true">↓</span>
+        </button>
+        <span class="mono arrival-meta">SS—27 / FLAGSHIP</span>
+      </div>
+    </section>
+
+    <!-- HUD -->
+    <header id="hud">
+      <button class="brand" type="button" data-action="home" aria-label="NOIR — back to the showroom">NOIR</button>
+      <div class="hud-zone" aria-live="polite">
+        <span class="mono hud-zone-index">01</span>
+        <span class="hud-zone-name">MOTION</span>
+      </div>
+      <div class="hud-actions">
+        <button class="hud-drop mono" type="button" data-action="drop" aria-label="Go to the next drop">
+          <span class="hud-drop-label">NEXT DROP</span> <span class="hud-drop-time">00:07:42</span>
+        </button>
+        <button class="hud-link" type="button" data-action="collection">COLLECTION</button>
+        <button class="hud-link hud-bag" type="button" data-action="bag" aria-label="Open your bag">BAG <span class="mono bag-count">00</span></button>
+        <button class="hud-sound mono" type="button" data-action="sound" aria-pressed="false" aria-label="Toggle sound">
+          <span class="sound-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        </button>
+      </div>
+    </header>
+
+    <nav id="rail" aria-label="Showroom zones"></nav>
+    <p id="hint" class="mono">SCROLL, DRAG OR USE ← → TO MOVE</p>
+
+    <!-- hover / recommendation labels anchored to 3D objects -->
+    <div id="hover-label" aria-hidden="true">
+      <span class="mono hover-code"></span>
+      <span class="hover-cta">EXPLORE OBJECT</span>
+      <span class="mono hover-extra"></span>
+    </div>
+    <div id="rec-label" aria-hidden="true"><span class="rec-dot"></span><span class="mono">YOU MAY LIKE THIS</span></div>
+
+    <!-- zone overlays -->
+    <section id="drop-stage" aria-live="polite">
+      <p class="mono drop-kicker">AFTER DARK — DROP 001</p>
+      <p class="drop-title">NEXT DROP</p>
+      <button class="drop-time mono" type="button" aria-label="Hold to advance time">00 : 07 : 42</button>
+      <p class="mono drop-hint">HOLD THE CLOCK TO ADVANCE TIME</p>
+    </section>
+    <section id="drop-live"><p class="mono">THE COLLECTION IS LIVE</p></section>
+    <section id="collection-stage">
+      <p class="mono collection-kicker">05 — YOUR COLLECTION</p>
+      <p class="collection-title">Nothing claimed yet.</p>
+      <p class="mono collection-sub">EVERYTHING YOU CLAIM IS KEPT HERE.</p>
+      <div class="collection-actions"></div>
+    </section>
+    <section id="archive-stage">
+      <p class="mono archive-kicker">◈ — THE ARCHIVE</p>
+      <p class="archive-title">Not everything is meant to be found.</p>
+      <button class="ghost-btn" type="button" data-action="leave-archive">← RETURN TO THE STORE</button>
+    </section>
+
+    <!-- 04–07 — PRODUCT DISCOVERY -->
+    <section id="inspect" aria-label="Object">
+      <button class="inspect-back ghost-btn" type="button" data-action="back">← SHOWROOM</button>
+      <div class="inspect-info">
+        <p class="mono inspect-zone"></p>
+        <h1 class="inspect-code"></h1>
+        <p class="inspect-name"></p>
+        <p class="inspect-price mono"></p>
+        <p class="inspect-tagline"></p>
+        <p class="inspect-desc"></p>
+        <ol class="inspect-hotspots"></ol>
+      </div>
+      <div class="inspect-config">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <p class="mono config-title">CONFIGURE</p>
+        <div class="config-groups"></div>
+        <p class="mono config-limited"></p>
+        <button class="claim" type="button"><span class="claim-label">CLAIM OBJECT</span><span class="mono claim-price"></span></button>
+        <div class="claimed-actions">
+          <button class="ghost-btn" type="button" data-action="bag">VIEW BAG</button>
+          <button class="ghost-btn" type="button" data-action="back">KEEP EXPLORING</button>
+        </div>
+      </div>
+      <button class="inspect-rec" type="button">
+        <span class="mono">YOU MAY LIKE THIS</span>
+        <span class="inspect-rec-name"></span>
+        <span aria-hidden="true">→</span>
+      </button>
+      <p class="mono inspect-hint">DRAG TO ROTATE · SCROLL TO ZOOM · ESC TO RETURN</p>
+    </section>
+    <div id="hotspots"></div>
+    <aside id="detail-card" aria-live="polite">
+      <div class="detail-media"></div>
+      <p class="mono detail-index"></p>
+      <p class="detail-title"></p>
+      <p class="detail-text"></p>
+      <button class="ghost-btn" type="button" data-action="close-detail">CLOSE</button>
+    </aside>
+
+    <!-- 13 — THE BAG -->
+    <aside id="bag" aria-label="Your bag" aria-hidden="true">
+      <div class="bag-head">
+        <p class="bag-title">YOUR BAG</p>
+        <button class="ghost-btn" type="button" data-action="close-bag" aria-label="Close bag">CLOSE</button>
+      </div>
+      <div class="bag-scroll">
+        <ul class="bag-items"></ul>
+        <div class="bag-empty">
+          <p>Your bag is empty.</p>
+          <p class="mono">OBJECTS YOU CLAIM WILL APPEAR HERE.</p>
+        </div>
+        <div class="bag-recs">
+          <p class="mono">YOU MAY ALSO LIKE</p>
+          <div class="bag-recs-list"></div>
+        </div>
+      </div>
+      <div class="bag-foot">
+        <div class="bag-total"><span class="mono">SUBTOTAL</span><span class="mono bag-subtotal">$0</span></div>
+        <button class="claim bag-checkout" type="button" data-action="checkout"><span class="claim-label">CHECKOUT</span><span class="mono">→</span></button>
+      </div>
+    </aside>
+    <div id="scrim" data-action="close-bag"></div>
+
+    <!-- 14 — CHECKOUT -->
+    <section id="checkout" aria-label="Checkout"></section>
+
+    <!-- 15 — ORDER CONFIRMATION -->
+    <section id="confirm" aria-live="polite">
+      <p class="confirm-title">OBJECT CLAIMED</p>
+      <p class="mono confirm-order"></p>
+      <p class="confirm-see">SEE YOU IN THE STORE.</p>
+      <button class="ghost-btn confirm-return" type="button" data-action="return-store">RETURN TO THE STORE</button>
+    </section>
+
+    <div id="toast" role="status" aria-live="polite"></div>
+    <div id="cursor" aria-hidden="true"><span class="cursor-dot"></span><span class="cursor-ring"></span><span class="mono cursor-label"></span></div>
+
+    <!-- shown only when WebGL is unavailable -->
+    <section id="lite" hidden></section>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

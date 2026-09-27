@@ -1,0 +1,32 @@
+{
+  "name": "noir",
+  "version": "1.0.0",
+  "description": "NOIR — The Store That You Explore. Shopping, reimagined as an experience.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "assets": "node scripts/fetch-assets.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Teejay012/NOIR.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Teejay012/NOIR/issues"
+  },
+  "homepage": "https://github.com/Teejay012/NOIR#readme",
+  "dependencies": {
+    "@fontsource-variable/inter-tight": "^5.3.0",
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "gsap": "^3.15.0",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@gltf-transform/cli": "^4.5.0",
+    "sharp": "^0.35.5",
+    "vite": "^8.3.1"
+  },
+  "private": true,
+  "type": "module"
+}
