@@ -36,9 +36,9 @@ export class ThumbRenderer {
       this.#init();
       const obj = source.replica(cfg);
       obj.shadow.visible = false;
-      obj.spin.rotation.set(0.12, (source.product.yaw || 0) - 0.55, 0, 'YXZ');
+      obj.spin.rotation.set(0.12, (source.product.yaw || 0), 0, 'YXZ');
       obj.update(0, 0, this.camera);
-      obj.spin.rotation.set(0.12, (source.product.yaw || 0) - 0.55, 0, 'YXZ');
+      obj.spin.rotation.set(0.12, (source.product.yaw || 0), 0, 'YXZ');
       obj.spin.updateMatrixWorld(true);
       obj.uniforms.uRootInv.value.copy(obj.spin.matrixWorld).invert();
       this.scene.add(obj.root);

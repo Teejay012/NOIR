@@ -47,7 +47,7 @@ export class Checkout {
     const step = (i, key, title, inner) => `
       <div class="co-step ${this.step === i ? 'is-open' : ''} ${this.done.has(key) ? 'is-done' : ''}" data-step="${i}">
         <button type="button" class="co-step-head" data-goto="${i}" ${this.done.has(key) || i <= this.step ? '' : 'disabled'}>
-          <span class="mono">0${i + 1}</span>${title}<span class="sum">${this.step !== i && this.done.has(key) ? summaries[key] : ''}</span>
+          <span class="n">0${i + 1}</span>${title}<span class="sum">${this.step !== i && this.done.has(key) ? summaries[key] : ''}</span>
         </button>
         <div class="co-step-body"><div class="co-step-inner"><div class="pad">${inner}</div></div></div>
       </div>`;
@@ -58,18 +58,18 @@ export class Checkout {
       </div>`;
     const choice = (group, id, title, sub, price) => `
       <button type="button" class="choice" data-choice="${group}" data-val="${id}" aria-pressed="${d[group] === id}">
-        <span><strong>${title}</strong><small>${sub}</small></span><span class="mono">${price}</span>
+        <span><strong>${title}</strong><small>${sub}</small></span><span class="p">${price}</span>
       </button>`;
 
     this.el.innerHTML = `
       <div class="co">
         <div class="co-top">
           <span class="brand">NOIR</span>
-          <button type="button" class="ghost-btn" data-exit>← RETURN TO THE STORE</button>
+          <button type="button" class="pill ghost" data-exit>← Return to the store</button>
         </div>
         <form class="co-main" novalidate>
-          <h2>Checkout</h2>
-          ${step(0, 'details', 'DETAILS', `
+          <h2>Check<em>out</em></h2>
+          ${step(0, 'details', 'Details', `
             <div class="fields">
               ${field('name', 'Name', { ac: 'name' })}
               ${field('email', 'Email', { ac: 'email', type: 'email', mode: 'email' })}
@@ -78,27 +78,27 @@ export class Checkout {
               ${field('postcode', 'Postcode', { half: true, ac: 'postal-code' })}
               ${field('country', 'Country', { ac: 'country-name' })}
             </div>
-            <button type="button" class="co-next" data-next="0">CONTINUE ↓</button>`)}
-          ${step(1, 'delivery', 'DELIVERY', `
-            ${choice('delivery', 'standard', 'STANDARD', '3–5 working days. Signed for.', 'FREE')}
-            ${choice('delivery', 'express', 'EXPRESS', '1–2 working days. Before noon.', '$25')}
-            <button type="button" class="co-next" data-next="1">CONTINUE ↓</button>`)}
-          ${step(2, 'payment', 'PAYMENT', `
-            ${choice('payment', 'card', 'CARD', 'Visa, Mastercard, Amex', '')}
-            ${choice('payment', 'wallet', 'WALLET', 'Apple Pay, Google Pay', '')}
+            <button type="button" class="co-next" data-next="0">Continue ↓</button>`)}
+          ${step(1, 'delivery', 'Delivery', `
+            ${choice('delivery', 'standard', 'Standard', '3–5 working days. Signed for.', 'FREE')}
+            ${choice('delivery', 'express', 'Express', '1–2 working days. Before noon.', '$25')}
+            <button type="button" class="co-next" data-next="1">Continue ↓</button>`)}
+          ${step(2, 'payment', 'Payment', `
+            ${choice('payment', 'card', 'Card', 'Visa, Mastercard, Amex', '')}
+            ${choice('payment', 'wallet', 'Wallet', 'Apple Pay, Google Pay', '')}
             ${d.payment === 'card' ? `<div class="fields" style="margin-top:14px">
               ${field('card', 'Card number', { mode: 'numeric', ph: '4242 4242 4242 4242' })}
               ${field('expiry', 'Expiry', { half: true, mode: 'numeric', ph: 'MM / YY' })}
               ${field('cvc', 'CVC', { half: true, mode: 'numeric', ph: '123' })}
             </div>` : ''}
-            <p class="co-note">DEMO STORE — NO PAYMENT IS TAKEN AND NOTHING YOU TYPE LEAVES THIS PAGE.</p>
-            <button type="button" class="co-next" data-next="2">CONTINUE ↓</button>`)}
-          ${step(3, 'confirm', 'CONFIRM', `
-            <div class="co-confirm-total"><span class="mono">TOTAL</span><span class="big">${money(total)}</span></div>
-            <button type="button" class="claim" data-place><span class="claim-label">CLAIM ORDER</span><span class="mono">${money(total)}</span></button>`)}
+            <p class="co-note">Demo store — no payment is taken and nothing you type leaves this page.</p>
+            <button type="button" class="co-next" data-next="2">Continue ↓</button>`)}
+          ${step(3, 'confirm', 'Confirm', `
+            <div class="co-confirm-total"><span>Total</span><span class="big">${money(total)}</span></div>
+            <button type="button" class="claim pill solid" data-place><span class="claim-label">Claim order</span><span class="claim-price">${money(total)}</span></button>`)}
         </form>
         <aside class="co-summary">
-          <p class="mono">YOUR BAG — ${String(state.bag.reduce((a, b) => a + b.qty, 0)).padStart(2, '0')}</p>
+          <p>Your bag — ${String(state.bag.reduce((a, b) => a + b.qty, 0)).padStart(2, '0')}</p>
           ${state.bag
             .map((b) => {
               const p = byId[b.id];

@@ -1,45 +1,52 @@
-// The NOIR flagship: one continuous WebGL space. Zones sit side by side along X,
-// the archive hides behind the After Dark wall, and a monumental N-01 floats on the horizon.
+// NOIR — one continuous space made of five worlds laid out along X.
+// The camera travels between them and the whole grade (sky, fog, light, reflections)
+// blends as it moves. Each world stages its three objects as a poster: one hero, two in the distance.
 import * as THREE from 'three';
 import gsap from 'gsap';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
-import { ZONES, ARCHIVE, PRODUCTS, byId, productsIn } from '../data.js';
+import { WORLDS, worldById, PRODUCTS, byId, productsIn } from '../data.js';
 import { createProduct, loadSource } from './product.js';
-import { textPlane, radialTexture } from './textures.js';
-import { Particles } from './particles.js';
+import { PALETTES, blendPalette, clonePalette } from './palettes.js';
+import { createSkyMaterial, applyPaletteToSky, NOISE } from './sky.js';
+import { BUILDERS } from './environments.js';
 import { ThumbRenderer } from './thumbs.js';
 
-const SLOT = [
-  { x: -3.4, z: -0.4, h: 0.92 },
-  { x: 0, z: -1.7, h: 1.08 },
-  { x: 3.4, z: -0.4, h: 0.92 },
-];
-const ARCHIVE_SLOT = [
-  { x: -3.2, z: 0, h: 0.95 },
-  { x: 0, z: -1.2, h: 1.1 },
-  { x: 3.2, z: 0, h: 0.95 },
-];
-
-const GrainShader = {
-  uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uAmount: { value: 0.045 }, uVignette: { value: 0.9 } },
+const GradeShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    uTime: { value: 0 },
+    uGrain: { value: 0.04 },
+    uVignette: { value: 0.75 },
+    uAberration: { value: 0.0015 },
+  },
   vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
-  fragmentShader: `
-    uniform sampler2D tDiffuse; uniform float uTime; uniform float uAmount; uniform float uVignette; varying vec2 vUv;
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDiffuse; uniform float uTime, uGrain, uVignette, uAberration; varying vec2 vUv;
     float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)) + uTime) * 43758.5453); }
     void main(){
-      vec4 c = texture2D(tDiffuse, vUv);
       vec2 q = vUv - 0.5;
-      float v = smoothstep(0.85, 0.2, length(q * vec2(1.0, 1.15)));
+      vec2 off = q * uAberration * length(q) * 4.0;
+      vec4 c = texture2D(tDiffuse, vUv);
+      c.r = texture2D(tDiffuse, vUv + off).r;
+      c.b = texture2D(tDiffuse, vUv - off).b;
+      float v = smoothstep(0.95, 0.25, length(q * vec2(1.0, 1.2)));
       c.rgb *= mix(1.0, v, uVignette);
-      c.rgb += (h(vUv * 1000.0) - 0.5) * uAmount;
+      c.rgb += (h(vUv * 1000.0) - 0.5) * uGrain;
       gl_FragColor = c;
     }`,
 };
+
+// Where the three objects of a world stand, relative to the world's origin.
+const SPOTS = {
+  hero: { x: 0, z: 0 },
+  left: { x: -3.5, z: -3.4 },
+  right: { x: 3.5, z: -3.4 },
+};
+const SIDE_LIFT = 1.05;
 
 export class World {
   constructor(canvas, { quality = 'high' } = {}) {
@@ -47,20 +54,25 @@ export class World {
     this.quality = quality;
     this.handlers = {};
     this.products = new Map();
-    this.pedestals = new Map();
+    this.envs = new Map();
+    this.layout = new Map(); // worldId → { hero, left, right } product ids
     this.mode = 'arrival';
-    this.zoneIndex = 0;
-    this.pointer = new THREE.Vector2(0, 0); // ndc
-    this.pointerSmooth = new THREE.Vector2(0, 0);
+    this.worldId = 'motion';
+    this.pointer = new THREE.Vector2();
+    this.pointerSmooth = new THREE.Vector2();
     this.pointerPx = { x: innerWidth / 2, y: innerHeight / 2 };
-    this.cam = { pos: new THREE.Vector3(0, 2.6, 44), target: new THREE.Vector3(0, 3.4, -60) };
+    this.cam = { pos: new THREE.Vector3(0, 1.6, 26), target: new THREE.Vector3(0, 3.2, -40) };
     this.zoom = 1;
     this.inspected = null;
     this.paused = false;
-    this.parallax = 1;
     this.time = 0;
     this.raycaster = new THREE.Raycaster();
     this.lastInteraction = performance.now();
+    this.palette = clonePalette(PALETTES.canyon);
+    this.fogBoost = 1;
+    this.dim = 0;
+    this.blackout = 0;
+    this.introExposure = 0;
     this.#setupRenderer();
     this.#setupScene();
     this.#bindInput();
@@ -68,6 +80,10 @@ export class World {
 
   on(handlers) {
     Object.assign(this.handlers, handlers);
+  }
+
+  get world() {
+    return worldById[this.worldId];
   }
 
   // ── setup ────────────────────────────────────────────────
@@ -79,27 +95,21 @@ export class World {
     r.toneMapping = THREE.ACESFilmicToneMapping;
     r.toneMappingExposure = 0;
     r.outputColorSpace = THREE.SRGBColorSpace;
+    this.pmrem = new THREE.PMREMGenerator(r);
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x050505);
-    this.scene.fog = new THREE.FogExp2(0x050505, 0.2);
-    const pmrem = new THREE.PMREMGenerator(r);
-    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-    this.scene.environmentIntensity = 0.32;
-
-    this.camera = new THREE.PerspectiveCamera(34, innerWidth / innerHeight, 0.05, 260);
+    this.scene.fog = new THREE.FogExp2(0x000000, 0.02);
+    this.camera = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 0.05, 700);
     this.#fitCamera();
 
-    const size = new THREE.Vector2(innerWidth, innerHeight);
     this.composer = new EffectComposer(r);
     this.renderPass = new RenderPass(this.scene, this.camera);
     this.composer.addPass(this.renderPass);
-    this.bloom = new UnrealBloomPass(size.clone().multiplyScalar(0.5), hi ? 0.55 : 0.4, 0.7, 0.82);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.4, 0.75, 0.9);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
-    this.grain = new ShaderPass(GrainShader);
-    this.composer.addPass(this.grain);
-
+    this.grade = new ShaderPass(GradeShader);
+    this.composer.addPass(this.grade);
     addEventListener('resize', () => this.resize());
   }
 
@@ -107,7 +117,7 @@ export class World {
     const aspect = innerWidth / innerHeight;
     this.camera.aspect = aspect;
     this.portrait = aspect < 0.9;
-    this.camera.fov = this.portrait ? 52 : aspect < 1.3 ? 42 : 34;
+    this.camera.fov = this.portrait ? 46 : aspect < 1.3 ? 38 : 32;
     this.camera.updateProjectionMatrix();
   }
 
@@ -115,236 +125,215 @@ export class World {
     this.renderer.setSize(innerWidth, innerHeight, false);
     this.composer.setSize(innerWidth, innerHeight);
     this.#fitCamera();
-    if (this.mode === 'showroom') this.goZone(this.zoneIndex, { duration: 0, slot: this.slot });
+    if (this.mode === 'poster') this.goWorld(this.worldId, { duration: 0 });
   }
 
   #setupScene() {
     const s = this.scene;
-    // light
-    this.hemi = new THREE.HemisphereLight(0xdedad2, 0x050505, 0.12);
-    s.add(this.hemi);
-    this.key = new THREE.SpotLight(0xfff6ea, 0, 26, 0.5, 0.9, 1.5);
-    this.key.position.set(0, 9, 4.5);
-    this.key.target.position.set(0, 1, -1);
-    s.add(this.key, this.key.target);
-    this.rim = new THREE.DirectionalLight(0xe4e6ee, 0.3);
-    this.rim.position.set(-4, 5, -8);
-    s.add(this.rim);
-    this.cursorLight = new THREE.PointLight(0xfff1dc, 0, 6, 1.8);
-    this.cursorLight.position.set(0, 2, 2);
-    s.add(this.cursorLight);
+    this.sky = new THREE.Mesh(new THREE.SphereGeometry(500, 48, 24), createSkyMaterial());
+    this.sky.renderOrder = -100;
+    this.sky.frustumCulled = false;
+    s.add(this.sky);
 
-    // floor
-    const floorMat = new THREE.MeshStandardMaterial({ color: 0x070707, roughness: 0.42, metalness: 0.3, envMapIntensity: 0.12 });
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), floorMat);
-    floor.rotation.x = -Math.PI / 2;
-    s.add(floor);
+    this.hemi = new THREE.HemisphereLight(0xffffff, 0x000000, 0.5);
+    this.key = new THREE.DirectionalLight(0xffffff, 2);
+    this.rim = new THREE.DirectionalLight(0xffffff, 1);
+    this.cursorLight = new THREE.PointLight(0xffffff, 0, 6, 1.8);
+    s.add(this.hemi, this.key, this.key.target, this.rim, this.rim.target, this.cursorLight);
 
-    // horizon glow — the backlight for the monument silhouette
-    const glowTex = radialTexture([[0, 'rgba(236,230,220,0.55)'], [0.35, 'rgba(160,156,150,0.16)'], [1, 'rgba(0,0,0,0)']]);
-    this.horizon = new THREE.Mesh(
-      new THREE.PlaneGeometry(130, 70),
-      new THREE.MeshBasicMaterial({ map: glowTex, transparent: true, depthWrite: false, fog: false, toneMapped: false, opacity: 0.9 }),
-    );
-    this.horizon.position.set(0, 10, -110);
-    s.add(this.horizon);
+    this.floorMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.8, metalness: 0.1, envMapIntensity: 0.6 });
+    this.floorMat.onBeforeCompile = (shader) => {
+      shader.vertexShader = 'varying vec3 vFloorW;\n' + shader.vertexShader.replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvFloorW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+      shader.fragmentShader =
+        'varying vec3 vFloorW;\n' +
+        NOISE +
+        '\n' +
+        shader.fragmentShader.replace(
+          '#include <map_fragment>',
+          '#include <map_fragment>\nfloat fn = n_fbm(vFloorW.xz * 0.35) * 0.6 + n_fbm(vFloorW.xz * 2.2) * 0.4;\ndiffuseColor.rgb *= 0.72 + fn * 0.55;',
+        );
+    };
+    this.floor = new THREE.Mesh(new THREE.PlaneGeometry(900, 400), this.floorMat);
+    this.floor.rotation.x = -Math.PI / 2;
+    this.floor.position.x = 140;
+    s.add(this.floor);
 
-    this.poolTex = radialTexture([[0, 'rgba(255,250,240,0.5)'], [0.4, 'rgba(255,250,240,0.12)'], [1, 'rgba(0,0,0,0)']]);
-    this.beamMat = new THREE.ShaderMaterial({
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      side: THREE.DoubleSide,
-      uniforms: { uOpacity: { value: 0.07 } },
-      vertexShader: `varying float vY; varying float vFacing;
-        void main(){ vY = uv.y; vec4 mv = modelViewMatrix * vec4(position,1.0);
-          vec3 n = normalize(normalMatrix * normal); vFacing = abs(dot(n, normalize(-mv.xyz)));
-          gl_Position = projectionMatrix * mv; }`,
-      fragmentShader: `uniform float uOpacity; varying float vY; varying float vFacing;
-        void main(){ float a = pow(vY, 2.2) * pow(vFacing, 2.0) * uOpacity; gl_FragColor = vec4(vec3(1.0,0.97,0.92), a); }`,
-    });
-
-    this.#buildArchitecture();
-    this.#buildZones();
-    this.#buildArchive();
-    this.particles = new Particles(this.quality === 'high' ? 2200 : 900);
-    s.add(this.particles.points);
-    this.thumbs = new ThumbRenderer();
-    this.collectionGroup = new THREE.Group();
-    s.add(this.collectionGroup);
-  }
-
-  #buildArchitecture() {
-    const s = this.scene;
-    const slabMat = new THREE.MeshStandardMaterial({ color: 0x080808, roughness: 0.75, metalness: 0.1, envMapIntensity: 0.25 });
-    const bladeMat = new THREE.MeshBasicMaterial({ color: 0xf4efe6, toneMapped: false });
-    // monoliths between zones
-    for (let i = 0; i < ZONES.length - 1; i++) {
-      const x = (ZONES[i].x + ZONES[i + 1].x) / 2;
-      const slab = new THREE.Mesh(new THREE.BoxGeometry(0.3, 10, 4.2), slabMat);
-      slab.position.set(x, 5, -3.2);
-      slab.rotation.y = i % 2 ? 0.18 : -0.18;
-      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.02, 9.6, 0.02), bladeMat);
-      blade.position.set(0.16, 0, 2.1);
-      slab.add(blade);
-      s.add(slab);
-    }
-    // ceiling light lines receding into the dark
-    const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false, fog: true });
-    for (const z of [-6, 1.5]) {
-      const line = new THREE.Mesh(new THREE.BoxGeometry(110, 0.025, 0.025), lineMat);
-      line.position.set(34, 9.5, z);
-      s.add(line);
-    }
-  }
-
-  #pedestal(x, z, h) {
-    const g = new THREE.Group();
-    g.position.set(x, 0, z);
-    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x121212, roughness: 0.38, metalness: 0.35 });
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.64, h, 64, 1), bodyMat);
-    body.position.y = h / 2;
-    const top = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.6, 0.6, 0.012, 64),
-      new THREE.MeshStandardMaterial({ color: 0x1b1b1b, roughness: 0.2, metalness: 0.6 }),
-    );
-    top.position.y = h + 0.006;
-    const ringMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.97, 0.92), toneMapped: false, transparent: true, opacity: 1 });
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.005, 8, 128), ringMat);
-    ring.rotation.x = Math.PI / 2;
-    ring.position.y = h + 0.012;
-    const pool = new THREE.Mesh(
-      new THREE.PlaneGeometry(4.2, 4.2),
-      new THREE.MeshBasicMaterial({ map: this.poolTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.55 }),
-    );
-    pool.rotation.x = -Math.PI / 2;
-    pool.position.y = 0.004;
-    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.75, 7, 48, 1, true), this.beamMat.clone());
-    beam.position.y = h + 3.6;
-    beam.rotation.y = Math.random() * 6;
-    // uv.y is 0 at the bottom of the cylinder; flip so the beam is brightest at the source
-    beam.geometry.attributes.uv.array.forEach((v, i, a) => {
-      if (i % 2) a[i] = 1 - v;
-    });
-    const sold = textPlane('SOLD', 0.1, { weight: 400, size: 120, tracking: 0.4, opacity: 0 });
-    sold.position.set(0, h + 0.016, 0.3);
-    sold.rotation.x = -Math.PI / 2;
-    g.add(body, top, ring, pool, beam, sold);
-    const anchor = new THREE.Group();
-    anchor.position.y = h;
-    g.add(anchor);
-    return { group: g, ring, ringMat, pool, beam, sold, anchor, h, level: 1 };
-  }
-
-  #buildZones() {
-    for (const zone of ZONES) {
-      if (zone.id === 'collection') continue;
-      const title = textPlane(zone.name, zone.name.length > 10 ? 2.1 : 3.1, { weight: 250, size: 220, tracking: -0.04, opacity: 0.075 });
-      title.position.set(zone.x, 4.3, -8.9);
-      this.scene.add(title);
-      const idx = textPlane(`${zone.index} — ${zone.line.toUpperCase()}`, 0.16, { font: '"IBM Plex Mono", monospace', weight: 400, size: 80, tracking: 0.12, opacity: 0.4 });
-      idx.position.set(zone.x, 6.3, -8.85);
-      this.scene.add(idx);
-      productsIn(zone.id).forEach((p) => {
-        const slot = SLOT[p.slot];
-        const ped = this.#pedestal(zone.x + slot.x, slot.z, slot.h);
-        ped.product = p;
-        this.scene.add(ped.group);
-        this.pedestals.set(p.id, ped);
+    for (const w of WORLDS) {
+      const env = BUILDERS[w.theme]();
+      env.group.position.x = w.x;
+      env.world = w;
+      s.add(env.group);
+      this.envs.set(w.id, env);
+      const items = productsIn(w.id);
+      this.layout.set(w.id, {
+        hero: items.find((p) => p.slot === 1)?.id,
+        left: items.find((p) => p.slot === 0)?.id,
+        right: items.find((p) => p.slot === 2)?.id,
       });
     }
+    this.eclipse = this.envs.get('afterdark');
+
+    // the env scene the reflections are rendered from — same sky, plus two softboxes
+    this.envScene = new THREE.Scene();
+    this.envSky = new THREE.Mesh(new THREE.SphereGeometry(50, 32, 16), createSkyMaterial());
+    this.envScene.add(this.envSky);
+    const box = (w, h, pos, int) => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color(int, int, int), side: THREE.DoubleSide }));
+      m.position.copy(pos);
+      m.lookAt(0, 0, 0);
+      this.envScene.add(m);
+      return m;
+    };
+    this.softKey = box(14, 6, new THREE.Vector3(-14, 16, 12), 3);
+    this.softRim = box(20, 3, new THREE.Vector3(10, 6, -18), 1.6);
+
+    this.thumbs = new ThumbRenderer();
+    this.#applyPalette(true);
   }
 
-  #buildArchive() {
-    const ad = ZONES.find((z) => z.id === 'afterdark');
-    const wallMat = new THREE.MeshStandardMaterial({ color: 0x070707, roughness: 0.8, metalness: 0.1, envMapIntensity: 0.2 });
-    this.doorL = new THREE.Mesh(new THREE.BoxGeometry(7, 10, 0.4), wallMat);
-    this.doorR = this.doorL.clone();
-    this.doorL.position.set(ad.x - 3.5, 5, -8.6);
-    this.doorR.position.set(ad.x + 3.5, 5, -8.6);
-    const seam = new THREE.Mesh(new THREE.BoxGeometry(0.012, 10, 0.02), new THREE.MeshBasicMaterial({ color: 0x2c2b29, toneMapped: false }));
-    seam.position.set(3.5, 0, 0.21);
-    this.doorL.add(seam);
-    this.scene.add(this.doorL, this.doorR);
+  // ── colour grade ─────────────────────────────────────────
+  #paletteAt(x) {
+    const list = WORLDS;
+    if (x <= list[0].x) return PALETTES[list[0].theme];
+    for (let i = 0; i < list.length - 1; i++) {
+      const a = list[i];
+      const b = list[i + 1];
+      if (x <= b.x) {
+        const t = THREE.MathUtils.smoothstep((x - a.x) / (b.x - a.x), 0.25, 0.75);
+        return blendPalette(this._blend || (this._blend = {}), PALETTES[a.theme], PALETTES[b.theme], t);
+      }
+    }
+    return PALETTES[list[list.length - 1].theme];
+  }
 
-    // the symbol: tiny, dim, easy to miss
-    this.secret = textPlane('◈', 0.13, { weight: 300, size: 160, font: 'Arial, sans-serif', opacity: 0.32, pad: 0.1 });
-    this.secret.position.set(ad.x + 5.6, 0.62, -8.38);
-    this.secret.userData.secret = true;
-    this.scene.add(this.secret);
-    // generous invisible hit area
-    this.secretHit = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), new THREE.MeshBasicMaterial({ visible: false }));
-    this.secretHit.position.copy(this.secret.position);
-    this.scene.add(this.secretHit);
-
-    // the room behind
-    const room = (this.archiveRoom = new THREE.Group());
-    room.position.set(ARCHIVE.x, 0, ARCHIVE.z);
-    const warm = new THREE.PointLight(0xffe6c8, 0, 16, 1.4);
-    warm.position.set(0, 6, 3);
-    this.archiveLight = warm;
-    room.add(warm);
-    const glow = new THREE.Mesh(
-      new THREE.PlaneGeometry(13, 10),
-      new THREE.MeshBasicMaterial({ map: radialTexture([[0, 'rgba(255,236,210,0.28)'], [1, 'rgba(0,0,0,0)']]), transparent: true, depthWrite: false, toneMapped: false }),
-    );
-    glow.position.set(0, 5, -7);
-    room.add(glow);
-    this.scene.add(room);
-    productsIn('archive').forEach((p) => {
-      const slot = ARCHIVE_SLOT[p.slot];
-      const ped = this.#pedestal(ARCHIVE.x + slot.x, ARCHIVE.z + slot.z, slot.h);
-      ped.product = p;
-      this.scene.add(ped.group);
-      this.pedestals.set(p.id, ped);
-    });
+  #applyPalette(force) {
+    const p = this.#paletteAt(this.cam.pos.x);
+    blendPalette(this.palette, p, p, 0);
+    const P = this.palette;
+    applyPaletteToSky(this.sky.material, P);
+    this.scene.fog.color.copy(P.fog);
+    this.scene.fog.density = P.fogDensity * (this.fogBoost || 1);
+    this.floorMat.color.copy(P.floor);
+    this.floorMat.roughness = P.floorRough;
+    this.floorMat.envMapIntensity = P.floorEnv;
+    this.hemi.color.copy(P.hemiSky);
+    this.hemi.groundColor.copy(P.hemiGround);
+    this.hemi.intensity = P.hemi;
+    this.key.color.copy(P.key);
+    this.key.intensity = P.keyInt;
+    this.rim.color.copy(P.rim);
+    this.rim.intensity = P.rimInt;
+    this.scene.environmentIntensity = P.env;
+    if (!this.bloomLocked) this.bloom.strength = P.bloom * (this.quality === 'high' ? 1 : 0.8);
+    this.exposureBase = P.exposure;
+    // reflections follow the world, re-rendered when the grade has moved far enough
+    const x = Math.round(this.cam.pos.x / 12);
+    if (force || x !== this.envKey) {
+      this.envKey = x;
+      applyPaletteToSky(this.envSky.material, P);
+      this.envSky.material.uniforms.uCloud.value = 0;
+      this.softKey.material.color.copy(P.key).multiplyScalar(2.6);
+      this.softRim.material.color.copy(P.rim).multiplyScalar(1.4);
+      const old = this.envRT;
+      this.envRT = this.pmrem.fromScene(this.envScene, 0.02);
+      this.scene.environment = this.envRT.texture;
+      old?.dispose();
+    }
   }
 
   // ── loading ──────────────────────────────────────────────
   async load(onProgress = () => {}) {
     const order = [...PRODUCTS].sort((a, b) => (a.zone === 'motion' ? -1 : 0) - (b.zone === 'motion' ? -1 : 0));
     let done = 0;
-    const firstZone = [];
-    const all = order.map(async (p) => {
+    const tasks = order.map(async (p) => {
       const obj = await createProduct(p);
-      const ped = this.pedestals.get(p.id);
-      ped.anchor.add(obj.root);
       obj.setReveal(-0.1);
       this.products.set(p.id, obj);
-      done++;
-      onProgress(done / order.length);
+      this.scene.add(obj.root);
+      this.#place(p.zone, false);
+      onProgress(++done / order.length);
       return obj;
     });
-    for (let i = 0; i < order.length; i++) if (order[i].zone === 'motion') firstZone.push(all[i]);
-    // the monument
+    // the monument: a colossal N-01 hanging over the canyon at first light
     loadSource(byId.n01).then(async () => {
       const m = await createProduct(byId.n01);
       m.setSilhouette(1);
       for (const mat of m.materials) mat.fog = false;
       m.idle = false;
       m.shadow.visible = false;
-      m.root.scale.setScalar(9);
-      m.root.position.set(0, 4.2, -62);
-      m.targetYaw = -0.5;
-      m.targetPitch = -0.08;
+      m.root.scale.setScalar(24);
+      m.root.position.set(0, 4, -130);
+      m.targetYaw = -0.4;
+      m.targetPitch = 0.05;
       this.monument = m;
       this.scene.add(m.root);
     });
-    await Promise.all(firstZone);
-    this.ready = Promise.all(all);
+    await Promise.all(order.map((p, i) => (p.zone === 'motion' ? tasks[i] : null)));
+    this.ready = Promise.all(tasks);
     return this.ready;
   }
 
-  // ── camera choreography ──────────────────────────────────
-  zoneView(i, slot = this.slot) {
-    const x = ZONES[i].x;
-    // portrait screens walk object by object instead of framing a whole zone
-    if (this.portrait && ZONES[i].id !== 'collection') {
-      const sl = SLOT[slot ?? 1];
-      return { pos: new THREE.Vector3(x + sl.x, 2.35, sl.z + 7.2), target: new THREE.Vector3(x + sl.x, 1.3, sl.z - 0.4) };
+  // Put a world's three objects on their spots (animated when swapping the hero).
+  #place(worldId, animate = true, duration = 1.2) {
+    const w = worldById[worldId];
+    const env = this.envs.get(worldId);
+    const lay = this.layout.get(worldId);
+    for (const spot of ['hero', 'left', 'right']) {
+      const obj = this.products.get(lay[spot]);
+      if (!obj) continue;
+      const S = SPOTS[spot];
+      const isHero = spot === 'hero';
+      const pos = { x: w.x + S.x, y: isHero ? env.heroY : 0, z: S.z };
+      // tall objects are scaled so they never climb into the poster title
+      const scale = isHero ? Math.min(this.portrait ? 1.2 : 1.3, 1.3 / Math.max(obj.height, 0.5)) : Math.min(0.72, 0.8 / Math.max(obj.height, 0.5));
+      const lift = isHero ? env.heroLift : SIDE_LIFT;
+      obj.spot = spot;
+      obj.floatAmp = isHero ? 0.035 : 0.07;
+      obj.floatSpeed = isHero ? 0.9 : 0.6 + Math.random() * 0.3;
+      obj.shadow.material.opacity = isHero ? 1 : 0.35;
+      if (!animate) {
+        obj.root.position.set(pos.x, pos.y, pos.z);
+        obj.root.scale.setScalar(scale);
+        obj.floatBase = lift;
+        continue;
+      }
+      gsap.to(obj.root.position, { ...pos, duration, ease: 'power3.inOut' });
+      gsap.to(obj.root.scale, { x: scale, y: scale, z: scale, duration, ease: 'power3.inOut' });
+      gsap.to(obj, { floatBase: lift, duration, ease: 'power3.inOut' });
     }
-    const back = this.portrait ? 14 : innerWidth / innerHeight < 1.3 ? 12.5 : 10.6;
-    return { pos: new THREE.Vector3(x, this.portrait ? 3.1 : 2.7, back), target: new THREE.Vector3(x, 1.35, -1.2) };
+  }
+
+  heroOf(worldId = this.worldId) {
+    return this.layout.get(worldId)?.hero;
+  }
+
+  sidesOf(worldId = this.worldId) {
+    const l = this.layout.get(worldId);
+    return [l.left, l.right];
+  }
+
+  // Bring an object to the centre of its poster.
+  setHero(id, { duration = 1.2 } = {}) {
+    const p = byId[id];
+    const lay = this.layout.get(p.zone);
+    if (!lay || lay.hero === id) return Promise.resolve(false);
+    const spot = lay.left === id ? 'left' : 'right';
+    lay[spot] = lay.hero;
+    lay.hero = id;
+    this.#place(p.zone, true, duration);
+    const obj = this.products.get(id);
+    if (obj) gsap.to(obj, { userYaw: obj.userYaw + Math.PI * 2, duration: duration * 1.1, ease: 'power3.inOut', onComplete: () => (obj.userYaw = 0) });
+    return new Promise((r) => setTimeout(() => r(true), duration * 1000));
+  }
+
+  // ── camera choreography ──────────────────────────────────
+  posterView(worldId = this.worldId) {
+    const w = worldById[worldId];
+    const env = this.envs.get(worldId);
+    const cy = env.heroY + env.heroLift;
+    if (this.portrait) return { pos: new THREE.Vector3(w.x, cy + 1.25, 10.2), target: new THREE.Vector3(w.x, cy + 0.85, 0) };
+    const back = innerWidth / innerHeight < 1.3 ? 8.8 : 7.4;
+    return { pos: new THREE.Vector3(w.x, cy + 0.95, back), target: new THREE.Vector3(w.x, cy + 0.72, 0) };
   }
 
   #tweenCam(pos, target, duration = 1.6, ease = 'power3.inOut') {
@@ -361,71 +350,94 @@ export class World {
     });
   }
 
-  #moveKey(x, z = -1, intensity = 70) {
-    gsap.to(this.key.position, { x, z: z + 5.5, duration: 1.4, ease: 'power2.inOut' });
-    gsap.to(this.key.target.position, { x, z, duration: 1.4, ease: 'power2.inOut' });
-    gsap.to(this.key, { intensity: intensity * 0.45, duration: 1.2 });
+  // A long travel between worlds arcs up and back, like a crane shot.
+  #travel(pos, target, duration) {
+    const from = this.cam.pos.clone();
+    const dist = Math.abs(pos.x - from.x);
+    if (dist < 5 || !duration) return this.#tweenCam(pos, target, duration);
+    gsap.killTweensOf(this.cam.pos);
+    gsap.killTweensOf(this.cam.target);
+    const o = { t: 0 };
+    const t0 = this.cam.target.clone();
+    return new Promise((res) =>
+      gsap.to(o, {
+        t: 1,
+        duration,
+        ease: 'power2.inOut',
+        onUpdate: () => {
+          const k = o.t;
+          const arc = Math.sin(k * Math.PI);
+          this.cam.pos.lerpVectors(from, pos, k);
+          this.cam.pos.y += arc * 1.4;
+          this.cam.pos.z += arc * 5;
+          this.cam.target.lerpVectors(t0, target, k);
+          this.cam.target.y += arc * 0.8;
+        },
+        onComplete: res,
+      }),
+    );
   }
 
   intro() {
-    // the environment slowly materialises
-    this.cam.pos.set(0, 2.6, 46);
-    this.cam.target.set(0, 3.2, -60);
-    gsap.to(this.renderer, { toneMappingExposure: 1, duration: 4, ease: 'power2.inOut' });
-    gsap.to(this.scene.fog, { density: 0.034, duration: 7, ease: 'power2.out' });
-    gsap.to(this.cam.pos, { z: 36, y: 2.3, duration: 16, ease: 'sine.out' });
-    this.#moveKey(0, -1, 40);
+    this.cam.pos.set(0, 1.5, 30);
+    this.cam.target.set(0, 5, -60);
+    gsap.to(this, { introExposure: 1, duration: 5, ease: 'power2.inOut' });
+    this.introExposure = 0;
+    gsap.to(this.cam.pos, { z: 22, y: 1.9, duration: 18, ease: 'sine.out' });
     let i = 0;
     for (const [, obj] of this.products) {
-      if (obj.product.zone === 'archive') continue;
-      gsap.to(obj.uniforms.uReveal, { value: 1.2, duration: 2.4, delay: 1.2 + i++ * 0.12, ease: 'power2.inOut' });
+      if (obj.product.zone !== 'motion') {
+        obj.setReveal(1.2);
+        continue;
+      }
+      gsap.to(obj.uniforms.uReveal, { value: 1.2, duration: 2.6, delay: 1.5 + i++ * 0.25, ease: 'power2.inOut' });
     }
+    for (const [, obj] of this.products) if (obj.product.zone === 'archive') obj.setReveal(-0.1);
   }
 
   async enter() {
     this.mode = 'travel';
     gsap.killTweensOf(this.cam.pos);
-    this.slot = 1;
-    const v = this.zoneView(0, 1);
-    await this.#tweenCam(v.pos, v.target, 3.2, 'power2.inOut');
-    this.mode = 'showroom';
-    this.zoneIndex = 0;
+    // the monument rises into the haze
+    if (this.monument) {
+      gsap.to(this.monument.root.position, { y: 30, duration: 5, ease: 'power2.in' });
+      gsap.to(this.monument.uniforms.uReveal, { value: -0.1, duration: 4, delay: 1, ease: 'power2.in', onComplete: () => (this.monument.root.visible = false) });
+    }
+    const v = this.posterView('motion');
+    await this.#tweenCam(v.pos, v.target, 3.4, 'power2.inOut');
+    this.mode = 'poster';
+    this.worldId = 'motion';
   }
 
-  async goZone(i, { duration = 1.7, slot = 1 } = {}) {
-    this.zoneIndex = i;
-    this.slot = slot;
-    const v = this.zoneView(i, slot);
-    this.#moveKey(ZONES[i].x, -1, 70);
-    gsap.to(this.archiveLight, { intensity: 0, duration: 1 });
+  async goWorld(id, { duration = 2.6 } = {}) {
+    this.worldId = id;
+    const v = this.posterView(id);
     this.mode = 'travel';
-    await this.#tweenCam(v.pos, v.target, duration);
-    this.mode = 'showroom';
+    await this.#travel(v.pos, v.target, duration);
+    this.mode = 'poster';
   }
 
   inspectView(obj) {
     const c = obj.centerWorld(new THREE.Vector3());
-    const size = Math.max(obj.height, obj.footprint);
-    const dist = (size * 1.75 + 0.6) * (this.portrait ? 1.55 : 1);
+    const size = Math.max(obj.height, obj.footprint) * obj.root.scale.x;
+    const dist = (size * 1.85 + 0.8) * (this.portrait ? 1.5 : 1);
     const target = c.clone();
-    if (this.portrait) target.y -= size * 0.42; // lift the object above the bottom sheet
-    const pos = c.clone().add(new THREE.Vector3(0, size * 0.28, dist));
+    if (this.portrait) target.y -= size * 0.4;
+    const pos = c.clone().add(new THREE.Vector3(size * 0.18, size * 0.22, dist));
     return { pos, target };
   }
 
   async goProduct(id, { duration = 1.6 } = {}) {
     const obj = this.products.get(id);
     if (!obj) return;
+    const zone = obj.product.zone;
+    if (zone !== this.worldId) await this.goWorld(zone, { duration: 2.2 });
+    if (this.heroOf(zone) !== id) await this.setHero(id, { duration: 1 });
     this.inspected = obj;
     this.zoom = 1;
     obj.userYaw = 0;
     obj.targetPitch = 0;
-    const ped = this.pedestals.get(id);
-    const zoneIdx = ZONES.findIndex((z) => z.id === obj.product.zone);
-    if (zoneIdx >= 0) this.zoneIndex = zoneIdx;
     this.mode = 'travel';
-    const wp = ped.group.position;
-    this.#moveKey(wp.x, wp.z, 90);
     const v = this.inspectView(obj);
     this.#quiet(true);
     await this.#tweenCam(v.pos, v.target, duration);
@@ -435,22 +447,25 @@ export class World {
   exitInspect() {
     const obj = this.inspected;
     this.inspected = null;
+    this.focused = false;
     this.#quiet(false);
     if (obj) {
       obj.userYaw = 0;
       obj.targetPitch = 0;
-      obj.targetYaw = obj.product.yaw || 0;
     }
-    if (obj?.product.zone === 'archive') return this.goArchive({ duration: 1.3 });
-    return this.goZone(this.zoneIndex, { duration: 1.3, slot: this.slot });
+    const v = this.posterView();
+    this.mode = 'travel';
+    return this.#tweenCam(v.pos, v.target, 1.4).then(() => (this.mode = 'poster'));
   }
 
-  // the environment becomes quieter around an inspected object
   #quiet(on) {
-    gsap.to(this.particles.material.uniforms.uOpacity, { value: on ? 0.25 : 1, duration: 1.2 });
-    gsap.to(this.scene, { environmentIntensity: on ? 0.5 : 0.32, duration: 1.2 });
-    gsap.to(this.scene.fog, { density: on ? 0.07 : 0.034, duration: 1.4 });
-    gsap.to(this.hemi, { intensity: on ? 0.12 : 0.25, duration: 1.2 });
+    gsap.to(this, { fogBoost: on ? 1.6 : 1, duration: 1.4 });
+    for (const [, env] of this.envs) if (env.motes) gsap.to(env.motes.material.uniforms.uOpacity, { value: on ? 0.25 : 0.7, duration: 1.2 });
+    for (const id of this.sidesOf()) {
+      const o = this.products.get(id);
+      const s = on ? 0.0001 : Math.min(0.72, 0.8 / Math.max(o?.height || 1, 0.5));
+      if (o) gsap.to(o.root.scale, { x: s, y: s, z: s, duration: on ? 0.8 : 1.2, ease: 'power3.inOut' });
+    }
   }
 
   focusHotspot(anchor) {
@@ -460,24 +475,22 @@ export class World {
     let yaw = obj.targetYaw;
     let pitch = 0;
     if (Math.abs(n.y) > 0.7) pitch = 0.7 * Math.sign(n.y);
-    else yaw = Math.atan2(-n.x, n.z) + 0.25;
+    else yaw = Math.atan2(-n.x, n.z) + 0.3;
     obj.userYaw = 0;
     obj.targetYaw = yaw;
     obj.targetPitch = pitch;
-    // where will the anchor be once the object has turned?
     const prev = obj.spin.rotation.clone();
     obj.spin.rotation.set(pitch, yaw, 0, 'YXZ');
     obj.spin.updateMatrixWorld(true);
     const p = anchor.getWorldPosition(new THREE.Vector3());
     obj.spin.rotation.copy(prev);
     obj.spin.updateMatrixWorld(true);
-    const size = Math.max(obj.height, obj.footprint);
-    // back away from the surface, outward from the object's centre and toward the viewer
+    const size = Math.max(obj.height, obj.footprint) * obj.root.scale.x;
     const c = obj.centerWorld(new THREE.Vector3());
     const out = p.clone().sub(c).normalize().lerp(new THREE.Vector3(0.15, 0.25, 1).normalize(), 0.55).normalize();
-    const reach = size * 0.5 + p.distanceTo(c) + 0.35;
-    const pos = p.clone().addScaledVector(out, reach);
+    const pos = p.clone().addScaledVector(out, size * 0.7 + p.distanceTo(c) + 0.45);
     this.zoom = 1;
+    this.focused = true;
     this.mode = 'travel';
     return this.#tweenCam(pos, p, 1.3).then(() => (this.mode = 'inspect'));
   }
@@ -486,68 +499,79 @@ export class World {
     const obj = this.inspected;
     if (!obj) return;
     obj.targetPitch = 0;
-    obj.targetYaw = obj.product.yaw || 0;
+    this.focused = false;
     const v = this.inspectView(obj);
     this.mode = 'travel';
     return this.#tweenCam(v.pos, v.target, 1.2).then(() => (this.mode = 'inspect'));
   }
 
-  // ── the archive ──────────────────────────────────────────
+  // ── the archive: through the eclipse ─────────────────────
   async openArchive() {
     this.mode = 'travel';
-    gsap.to(this.doorL.position, { x: this.doorL.position.x - 5.5, duration: 2.6, ease: 'power3.inOut' });
-    gsap.to(this.doorR.position, { x: this.doorR.position.x + 5.5, duration: 2.6, ease: 'power3.inOut' });
-    gsap.to(this.secret.material, { opacity: 0, duration: 0.6 });
-    for (const p of productsIn('archive')) {
-      const obj = this.products.get(p.id);
-      if (obj) gsap.to(obj.uniforms.uReveal, { value: 1.2, duration: 2.2, delay: 1.8 + p.slot * 0.3 });
-    }
-    return this.goArchive({ duration: 3.4 });
+    const ad = worldById.afterdark;
+    const disc = this.eclipse.disc.getWorldPosition(new THREE.Vector3());
+    gsap.to(this.eclipse.secret.material, { opacity: 0, duration: 0.6 });
+    // dive into the black disc
+    gsap.to(this.eclipse.corona.uFlare, { value: 1, duration: 2.2, ease: 'power2.in' });
+    await this.#tweenCam(new THREE.Vector3(ad.x, disc.y, disc.z + 1.2), disc, 2.6, 'power3.in');
+    gsap.set(this.eclipse.corona.uFlare, { value: 0 });
+    await this.goArchive({ duration: 0, fromBlack: true });
   }
 
-  async goArchive({ duration = 2 } = {}) {
-    gsap.to(this.archiveLight, { intensity: 55, duration: 2 });
-    this.#moveKey(ARCHIVE.x, ARCHIVE.z - 0.5, 50);
-    this.mode = 'travel';
-    const back = this.portrait ? 12 : 8.4;
-    await this.#tweenCam(new THREE.Vector3(ARCHIVE.x, 2.2, ARCHIVE.z + back), new THREE.Vector3(ARCHIVE.x, 1.4, ARCHIVE.z - 1), duration);
-    this.mode = 'archive';
+  async goArchive({ duration = 2.6, fromBlack = false } = {}) {
+    const lay = this.layout.get('archive');
+    for (const id of Object.values(lay)) {
+      const o = this.products.get(id);
+      if (o && o.uniforms.uReveal.value < 1) gsap.to(o.uniforms.uReveal, { value: 1.2, duration: 2.4, delay: 0.8 });
+    }
+    if (fromBlack) {
+      this.worldId = 'archive';
+      const v = this.posterView('archive');
+      this.cam.pos.copy(v.pos).add(new THREE.Vector3(0, 1.5, 8));
+      this.cam.target.copy(v.target).add(new THREE.Vector3(0, 1, 0));
+      this.#applyPalette(true);
+      this.blackout = 1;
+      gsap.to(this, { blackout: 0, duration: 2.4, ease: 'power2.out' });
+      await this.#tweenCam(v.pos, v.target, 3.2, 'power2.out');
+      this.mode = 'poster';
+      return;
+    }
+    return this.goWorld('archive', { duration });
   }
 
   setArchiveOpen(open) {
-    const ad = ZONES.find((z) => z.id === 'afterdark');
-    this.doorL.position.x = ad.x - 3.5 - (open ? 5.5 : 0);
-    this.doorR.position.x = ad.x + 3.5 + (open ? 5.5 : 0);
-    this.secret.material.opacity = open ? 0 : 0.32;
-    if (open) for (const p of productsIn('archive')) this.products.get(p.id)?.setReveal(1.2);
+    this.eclipse.secret.material.opacity = open ? 0.18 : 0.4;
   }
 
   // ── state reflections ────────────────────────────────────
+  // A claimed object stays in its poster as a dark ghost; the space remembers it was taken.
   setClaimed(isClaimed) {
-    for (const [id, ped] of this.pedestals) {
+    for (const [id, obj] of this.products) {
       const claimed = isClaimed(id);
-      const obj = this.products.get(id);
-      if (ped.claimed === claimed) continue;
-      const first = ped.claimed === undefined;
-      ped.claimed = claimed;
-      gsap.to(ped.sold.material, { opacity: claimed ? 0.55 : 0, duration: first ? 0 : 1, delay: claimed && !first ? 1.2 : 0 });
-      if (!obj) continue;
+      if (obj.claimed === claimed) continue;
+      const first = obj.claimed === undefined;
+      obj.claimed = claimed;
+      const locked = obj.product.zone === 'afterdark' && this.dropState !== 'revealed';
+      if (locked) continue;
       if (claimed) {
-        if (first) obj.root.visible = false;
-      } else if (!obj.root.visible || obj.float.scale.x < 1) {
-        // returned to its pedestal — re-materialise
+        if (first || obj.root.visible) {
+          obj.setSilhouette(0.94);
+          obj.uniforms.uGlow.value = 0.45;
+        }
+      } else {
         obj.root.visible = true;
         gsap.killTweensOf(obj.float.position);
         gsap.killTweensOf(obj.float.scale);
-        obj.float.position.set(0, 0.05, 0);
+        obj.float.position.set(0, obj.floatBase, 0);
         obj.float.scale.setScalar(1);
         obj.idle = true;
-        if (!first) gsap.fromTo(obj.uniforms.uReveal, { value: -0.1 }, { value: 1.2, duration: 1.8, ease: 'power2.inOut' });
+        gsap.to(obj.uniforms.uSilhouette, { value: 0, duration: first ? 0 : 1.2 });
+        gsap.to(obj.uniforms.uGlow, { value: 0, duration: first ? 0 : 1.2 });
       }
     }
   }
 
-  // Claim: the object leaves its pedestal and travels to the interface.
+  // Claim: the object leaves the poster and travels into the bag, then returns as a ghost.
   flyToInterface(id, screen) {
     const obj = this.products.get(id);
     if (!obj) return Promise.resolve();
@@ -559,11 +583,23 @@ export class World {
     const local = obj.root.worldToLocal(dest.clone());
     const start = obj.float.position.clone();
     return new Promise((res) => {
-      const tl = gsap.timeline({ onComplete: () => ((obj.root.visible = false), res()) });
-      tl.to(obj.float.position, { y: start.y + obj.height * 0.35 + 0.15, duration: 0.7, ease: 'power2.out' });
+      const tl = gsap.timeline({
+        onComplete: () => {
+          // the ghost settles back into place
+          obj.float.position.copy(start);
+          obj.float.scale.setScalar(1);
+          obj.idle = true;
+          obj.setSilhouette(0.94);
+          obj.uniforms.uGlow.value = 0.45;
+          gsap.fromTo(obj.uniforms.uReveal, { value: -0.1 }, { value: 1.2, duration: 1.6, delay: 0.6, ease: 'power2.inOut' });
+          res();
+        },
+      });
+      tl.to(obj.float.position, { y: start.y + obj.height * 0.3 + 0.15, duration: 0.7, ease: 'power2.out' });
       tl.to(obj, { userYaw: obj.userYaw + Math.PI * 1.2, duration: 1.5, ease: 'power2.inOut' }, 0);
       tl.to(obj.float.position, { x: local.x, y: local.y, z: local.z, duration: 0.85, ease: 'power3.in' }, 0.62);
-      tl.to(obj.float.scale, { x: 0.06, y: 0.06, z: 0.06, duration: 0.85, ease: 'power3.in' }, 0.62);
+      tl.to(obj.float.scale, { x: 0.05, y: 0.05, z: 0.05, duration: 0.85, ease: 'power3.in' }, 0.62);
+      tl.set(obj.uniforms.uReveal, { value: -0.1 });
     });
   }
 
@@ -571,12 +607,11 @@ export class World {
     this.products.get(id)?.applyConfig(cfg, animate);
   }
 
+  // The store points at another object: it brightens at the rim and drifts forward a little.
   setRecommendation(id) {
     for (const [pid, obj] of this.products) {
-      const on = pid === id;
-      gsap.to(obj.uniforms.uGlow, { value: on ? 1 : 0, duration: 1.2 });
-      const ped = this.pedestals.get(pid);
-      gsap.to(ped.beam.material.uniforms.uOpacity, { value: on ? 0.22 : 0.07 * ped.level, duration: 1.2 });
+      if (obj.claimed) continue;
+      gsap.to(obj.uniforms.uGlow, { value: pid === id ? 0.9 : 0, duration: 1.2 });
     }
     this.recommended = id;
   }
@@ -584,73 +619,36 @@ export class World {
   // ── the drop ─────────────────────────────────────────────
   setDrop(stateName, charge = 0) {
     this.dropState = stateName;
-    for (const p of productsIn('afterdark')) {
-      const obj = this.products.get(p.id);
-      const ped = this.pedestals.get(p.id);
-      if (stateName === 'locked') {
-        obj?.setSilhouette(1);
-        const lit = charge > (p.slot + 1) / 4 ? 1 : 0;
-        const flicker = lit && charge < 1 ? (Math.random() > 0.08 ? 1 : 0.2) : lit;
-        ped.level = 0.05 + flicker * 0.95;
-      } else {
-        ped.level = 1;
-      }
+    const cu = this.eclipse.corona;
+    if (stateName === 'locked') {
+      const flicker = charge > 0 && charge < 1 && Math.random() < 0.06 ? 0.4 : 1;
+      cu.uCharge.value = (0.12 + charge * 0.55) * flicker;
+      for (const p of productsIn('afterdark')) this.products.get(p.id)?.setSilhouette(1);
+    } else if (!this.revealing) {
+      cu.uCharge.value = 0.75;
     }
   }
 
   async revealDrop() {
-    const items = productsIn('afterdark');
+    this.revealing = true;
+    const cu = this.eclipse.corona;
     // silence
-    await new Promise((r) => gsap.to(this.renderer, { toneMappingExposure: 0.04, duration: 0.5, onComplete: r }));
+    await new Promise((r) => gsap.to(this, { dim: 0.96, duration: 0.5, onComplete: r }));
     await new Promise((r) => setTimeout(r, 1300));
     this.dropState = 'revealed';
-    for (const p of items) {
+    gsap.fromTo(cu.uFlare, { value: 1 }, { value: 0, duration: 3.2, ease: 'power2.out' });
+    gsap.to(cu.uCharge, { value: 0.75, duration: 1.5 });
+    this.bloomLocked = true;
+    gsap.fromTo(this.bloom, { strength: 2.4 }, { strength: PALETTES.eclipse.bloom, duration: 3.4, onComplete: () => (this.bloomLocked = false) });
+    for (const p of productsIn('afterdark')) {
       const obj = this.products.get(p.id);
-      this.pedestals.get(p.id).level = 1;
       if (!obj) continue;
-      obj.setSilhouette(0);
+      obj.setSilhouette(obj.claimed ? 0.94 : 0);
       obj.setReveal(-0.1);
-      gsap.to(obj.uniforms.uReveal, { value: 1.2, duration: 2.4, delay: 0.3 + p.slot * 0.35, ease: 'power2.inOut' });
+      gsap.to(obj.uniforms.uReveal, { value: 1.2, duration: 2.4, delay: 0.4 + p.slot * 0.35, ease: 'power2.inOut' });
     }
-    gsap.to(this.renderer, { toneMappingExposure: 1, duration: 2.2, ease: 'power2.inOut' });
-    gsap.fromTo(this.bloom, { strength: 2.2 }, { strength: this.quality === 'high' ? 0.55 : 0.4, duration: 3 });
-  }
-
-  // ── your collection ──────────────────────────────────────
-  async setCollection(items) {
-    for (const c of [...this.collectionGroup.children]) {
-      this.collectionGroup.remove(c);
-      c.userData.obj?.dispose();
-    }
-    const zone = ZONES.find((z) => z.id === 'collection');
-    const shown = items.slice(-10);
-    const perRow = 5;
-    await this.ready;
-    shown.forEach((item, i) => {
-      const src = this.products.get(item.id);
-      if (!src) return;
-      const row = Math.floor(i / perRow);
-      const col = i % perRow;
-      const count = Math.min(perRow, shown.length - row * perRow);
-      const x = zone.x + (col - (count - 1) / 2) * 1.9;
-      const z = -0.6 - row * 2.4;
-      const plinth = new THREE.Mesh(
-        new THREE.BoxGeometry(1.2, 0.5, 1.2),
-        new THREE.MeshStandardMaterial({ color: item.owned ? 0x161616 : 0x0f0f0f, roughness: 0.4, metalness: 0.3 }),
-      );
-      plinth.position.set(x, 0.25, z);
-      const obj = src.replica(item.cfg);
-      obj.root.position.set(x, 0.5, z);
-      obj.root.scale.setScalar(0.72);
-      obj.idle = true;
-      const label = textPlane(`${item.code}${item.owned ? ' — OWNED' : ' — IN BAG'}`, 0.07, { font: '"IBM Plex Mono", monospace', size: 70, weight: 400, tracking: 0.1, opacity: 0.6 });
-      label.position.set(x, 0.505, z + 0.62);
-      label.rotation.x = -Math.PI / 2;
-      const group = new THREE.Group();
-      group.add(plinth, obj.root, label);
-      group.userData.obj = obj;
-      this.collectionGroup.add(group);
-    });
+    gsap.to(this, { dim: 0, duration: 2.2, ease: 'power2.inOut' });
+    this.revealing = false;
   }
 
   // ── confirmation void ────────────────────────────────────
@@ -658,13 +656,14 @@ export class World {
     await this.ready;
     const src = this.products.get(item.id);
     if (!src) return;
+    const pal = PALETTES[worldById[src.product.zone].theme];
     this.voidScene = new THREE.Scene();
     this.voidScene.background = new THREE.Color(0x000000);
     this.voidScene.environment = this.scene.environment;
-    this.voidScene.environmentIntensity = 0.45;
-    const key = new THREE.SpotLight(0xfff4e6, 60, 20, 0.5, 0.9, 1.4);
+    this.voidScene.environmentIntensity = 0.5;
+    const key = new THREE.SpotLight(pal.key, 70, 20, 0.5, 0.9, 1.4);
     key.position.set(2, 6, 4);
-    const rim = new THREE.DirectionalLight(0xdfe5ff, 1.4);
+    const rim = new THREE.DirectionalLight(pal.rim, 2.2);
     rim.position.set(-3, 3, -4);
     const obj = src.replica(item.cfg);
     obj.shadow.visible = false;
@@ -692,31 +691,28 @@ export class World {
 
   thumbnail(id, cfg) {
     const src = this.products.get(id);
-    if (!src) return null;
-    return this.thumbs.render(src, cfg);
+    return src ? this.thumbs.render(src, cfg) : null;
   }
 
   // ── projection helpers for the DOM layer ─────────────────
   project(v3) {
     const p = v3.clone().project(this.camera);
-    return { x: (p.x * 0.5 + 0.5) * innerWidth, y: (-p.y * 0.5 + 0.5) * innerHeight, visible: p.z < 1 && Math.abs(p.x) < 1.2 && Math.abs(p.y) < 1.2 };
+    return { x: (p.x * 0.5 + 0.5) * innerWidth, y: (-p.y * 0.5 + 0.5) * innerHeight, visible: p.z < 1 && Math.abs(p.x) < 1.1 && Math.abs(p.y) < 1.1 };
   }
 
-  productLabelPoint(id) {
+  productLabelPoint(id, below = false) {
     const obj = this.products.get(id);
     if (!obj) return null;
     const p = obj.centerWorld(new THREE.Vector3());
-    p.y += obj.height * 0.5 + 0.25;
+    p.y += (obj.height * 0.5 + 0.12) * obj.root.scale.y * (below ? -1 : 1);
     return this.project(p);
   }
 
   anchorScreen(anchor) {
     const p = anchor.getWorldPosition(new THREE.Vector3());
     const res = this.project(p);
-    // hide anchors facing away from the camera
     const n = anchor.userData.normal.clone().transformDirection(anchor.parent.matrixWorld);
-    const toCam = this.camera.position.clone().sub(p).normalize();
-    res.facing = n.dot(toCam) > -0.15;
+    res.facing = n.dot(this.camera.position.clone().sub(p).normalize()) > -0.15;
     return res;
   }
 
@@ -741,21 +737,23 @@ export class World {
       if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (pinch && pointers.size === 2) {
         const [a, b] = [...pointers.values()];
-        const d = Math.hypot(a.x - b.x, a.y - b.y);
-        this.zoom = THREE.MathUtils.clamp(pinch.zoom * (pinch.d / d), 0.45, 1.5);
+        this.zoom = THREE.MathUtils.clamp(pinch.zoom * (pinch.d / Math.hypot(a.x - b.x, a.y - b.y)), 0.45, 1.5);
         return;
       }
-      if (down) {
-        const dx = e.clientX - down.x;
-        const dy = e.clientY - down.y;
-        down.moved = Math.max(down.moved, Math.hypot(dx, dy));
-        if (this.mode === 'inspect' && this.inspected && down.moved > 4) {
-          this.inspected.userYaw = down.yaw + dx * 0.008;
-          this.inspected.targetPitch = THREE.MathUtils.clamp(down.pitch + dy * 0.004, -0.5, 0.7);
-          this.lastInteraction = performance.now();
-          this.handlers.onDrag?.();
-        }
-        if ((this.mode === 'showroom' || this.mode === 'archive') && e.pointerType !== 'mouse') this.handlers.onSwipeMove?.(dx, dy);
+      if (!down) return;
+      const dx = e.clientX - down.x;
+      const dy = e.clientY - down.y;
+      down.moved = Math.max(down.moved, Math.hypot(dx, dy));
+      if (this.mode === 'inspect' && this.inspected && down.moved > 4) {
+        this.inspected.userYaw = down.yaw + dx * 0.008;
+        this.inspected.targetPitch = THREE.MathUtils.clamp(down.pitch + dy * 0.004, -0.5, 0.7);
+        this.lastInteraction = performance.now();
+        this.handlers.onDrag?.();
+      }
+      if (this.mode === 'poster' && this.heroOf() && down.moved > 4 && e.pointerType === 'mouse') {
+        // drag the hero around in the poster too
+        const hero = this.products.get(this.heroOf());
+        if (hero) hero.userYaw = down.yaw + dx * 0.006;
       }
     });
     const up = (e) => {
@@ -766,19 +764,22 @@ export class World {
       down = null;
       const dx = e.clientX - d.x;
       const dy = e.clientY - d.y;
-      if (d.moved < 6 && performance.now() - d.t < 600) this.#click(e);
-      else if (e.pointerType !== 'mouse' || this.mode === 'showroom') this.handlers.onSwipe?.(dx, dy, this.mode);
+      if (d.moved < 6 && performance.now() - d.t < 600) this.#click();
+      else if (e.pointerType !== 'mouse') this.handlers.onSwipe?.(dx, dy, this.mode);
+      if (this.mode === 'poster') {
+        const hero = this.products.get(this.heroOf());
+        if (hero) gsap.to(hero, { userYaw: 0, duration: 1.6, ease: 'power3.out' });
+      }
     };
     addEventListener('pointerup', up);
     addEventListener('pointercancel', up);
     el.addEventListener(
       'wheel',
       (e) => {
-        if (this.mode === 'inspect') {
-          e.preventDefault();
-          this.zoom = THREE.MathUtils.clamp(this.zoom * (1 + e.deltaY * 0.001), 0.45, 1.5);
-          this.lastInteraction = performance.now();
-        }
+        if (this.mode !== 'inspect') return;
+        e.preventDefault();
+        this.zoom = THREE.MathUtils.clamp(this.zoom * (1 + e.deltaY * 0.001), 0.45, 1.5);
+        this.lastInteraction = performance.now();
       },
       { passive: false },
     );
@@ -786,33 +787,38 @@ export class World {
 
   #pickables() {
     const list = [];
-    for (const [, obj] of this.products) if (obj.root.visible && (obj.product.zone !== 'afterdark' || this.dropState === 'revealed')) list.push(...obj.meshes);
+    const lay = this.layout.get(this.worldId);
+    if (!lay) return list;
+    for (const id of Object.values(lay)) {
+      const obj = this.products.get(id);
+      if (!obj?.root.visible) continue;
+      if (obj.product.zone === 'afterdark' && this.dropState !== 'revealed') continue;
+      list.push(...obj.meshes);
+    }
     return list;
   }
 
   #hit() {
     this.raycaster.setFromCamera(this.pointer, this.camera);
-    const secret = this.raycaster.intersectObject(this.secretHit, false);
-    const hits = this.raycaster.intersectObjects(this.#pickables(), false);
-    if (secret.length && (!hits.length || secret[0].distance < hits[0].distance)) return { secret: true };
-    if (!hits.length) {
-      // pedestal hit counts as the product (bigger target, especially for small objects)
-      return null;
+    if (this.worldId === 'afterdark') {
+      const s = this.raycaster.intersectObject(this.eclipse.secretHit, false);
+      if (s.length) return { secret: true };
     }
+    const hits = this.raycaster.intersectObjects(this.#pickables(), false);
+    if (!hits.length) return null;
     let o = hits[0].object;
     while (o && !o.userData.product) o = o.parent;
-    return o ? { product: o.userData.product } : null;
+    if (!o) return null;
+    const p = o.userData.product;
+    return { product: p, hero: this.heroOf(p.zone) === p.id };
   }
 
   #click() {
-    if (this.mode !== 'showroom' && this.mode !== 'archive' && this.mode !== 'inspect') return;
+    if (this.mode !== 'poster' && this.mode !== 'inspect') return;
     const h = this.#hit();
-    if (this.mode === 'inspect') {
-      if (h?.product && h.product.id !== this.inspected?.product.id) this.handlers.onPick?.(h.product);
-      return;
-    }
+    if (this.mode === 'inspect') return;
     if (h?.secret) this.handlers.onSecret?.();
-    else if (h?.product) this.handlers.onPick?.(h.product);
+    else if (h?.product) this.handlers.onPick?.(h.product, h.hero);
   }
 
   // ── frame ────────────────────────────────────────────────
@@ -836,88 +842,88 @@ export class World {
     const px = this.pointerSmooth.x;
     const py = this.pointerSmooth.y;
 
-    // camera = choreographed base + parallax toward the cursor + inspect zoom
     const cam = this.camera;
-    const base = this.cam.pos;
     const target = this.cam.target;
-    const par = this.mode === 'inspect' ? 0.12 : this.mode === 'checkout' ? 0 : 0.45;
-    const offset = new THREE.Vector3(px * par, py * par * 0.5, 0);
-    const pos = base.clone().add(offset);
-    if (this.mode === 'inspect' || (this.mode === 'travel' && this.inspected)) {
-      pos.sub(target).multiplyScalar(this.zoom).add(target);
-    }
+    const par = this.mode === 'inspect' ? 0.1 : this.mode === 'poster' ? 0.35 : 0.2;
+    const pos = this.cam.pos.clone().add(new THREE.Vector3(px * par, py * par * 0.4, 0));
+    if (this.inspected && (this.mode === 'inspect' || this.mode === 'travel')) pos.sub(target).multiplyScalar(this.zoom).add(target);
     cam.position.copy(pos);
-    cam.lookAt(target.x + px * par * 0.2, target.y + py * par * 0.1, target.z);
+    cam.lookAt(target.x + px * par * 0.15, target.y + py * par * 0.08, target.z);
+    this.sky.position.copy(cam.position);
+
+    this.#applyPalette(false);
+    const exposure = this.exposureBase * (this.introExposure ?? 1) * (1 - (this.dim || 0)) * (1 - (this.blackout || 0));
+    this.renderer.toneMappingExposure = exposure;
+    this.sky.material.uniforms.uTime.value = t;
+
+    // lights sit relative to the camera's world so every poster is lit the same way
+    const wx = cam.position.x;
+    this.key.position.set(wx - 6, 9, 7);
+    this.key.target.position.set(wx, 0.8, 0);
+    this.rim.position.set(wx + 5, 1.6, -7);
+    this.rim.target.position.set(wx, 1, 0);
 
     // hover
-    if ((this.mode === 'showroom' || this.mode === 'archive' || this.mode === 'inspect') && matchMedia('(hover: hover)').matches) {
-      const h = this.#hit();
+    if ((this.mode === 'poster' || this.mode === 'inspect') && matchMedia('(hover: hover)').matches) {
+      const h = this.mode === 'poster' ? this.#hit() : null;
       const key = h?.secret ? 'secret' : h?.product?.id || null;
       if (key !== this.hoverKey) {
         this.hoverKey = key;
         this.handlers.onHover?.(h);
       }
-      if (h?.secret) this.secret.material.opacity = Math.min(0.5, this.secret.material.opacity + dt * 0.3);
     } else if (this.hoverKey) {
       this.hoverKey = null;
       this.handlers.onHover?.(null);
     }
 
-    // the cursor light — the store responds to you
+    // a light that follows your hand
     this.raycaster.setFromCamera(this.pointerSmooth, cam);
-    const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -(this.inspected ? this.inspected.centerWorld(new THREE.Vector3()).z + 0.9 : target.z + 2.4));
-    const hitPoint = new THREE.Vector3();
-    if (this.raycaster.ray.intersectPlane(plane, hitPoint)) {
-      hitPoint.y = THREE.MathUtils.clamp(hitPoint.y, 1.1, 4);
-      this.cursorLight.position.lerp(hitPoint, 1 - Math.exp(-dt * 6));
-      this.particles.setMouse(hitPoint);
+    const focusZ = this.inspected ? this.inspected.centerWorld(_v).z + 1 : 1.6;
+    const hit = new THREE.Vector3();
+    if (this.raycaster.ray.intersectPlane(_plane.set(_zAxis, -focusZ), hit)) {
+      hit.y = THREE.MathUtils.clamp(hit.y, 0.6, 4);
+      this.cursorLight.position.lerp(hit, 1 - Math.exp(-dt * 6));
+      for (const [, env] of this.envs) env.motes?.material.uniforms.uMouse.value.copy(hit);
     }
-    const wantCursor = this.mode === 'arrival' || this.mode === 'void' ? 0 : this.inspected ? 4 : 7;
+    const wantCursor = this.mode === 'arrival' || this.focused ? 0 : this.inspected ? 2.5 : 5;
+    this.cursorLight.color.copy(this.palette.key);
     this.cursorLight.intensity += (wantCursor - this.cursorLight.intensity) * k;
 
+    // environments near the camera are alive, the rest sleep
+    for (const [, env] of this.envs) {
+      const near = Math.abs(env.world.x - cam.position.x) < 60;
+      env.group.visible = near;
+      if (near) env.update(dt, t);
+    }
+
     // objects turn toward you
-    const zoneX = ZONES[this.zoneIndex]?.x ?? 0;
     for (const [, obj] of this.products) {
-      const near = Math.abs(obj.root.getWorldPosition(_tmp).x - cam.position.x) < 8;
+      const near = Math.abs(obj.root.position.x - cam.position.x) < 30;
+      obj.root.visible = near && obj.root.scale.x > 0.001;
+      if (!obj.root.visible) continue;
       if (obj !== this.inspected) {
-        obj.targetYaw = (obj.product.yaw || 0) + (near ? px * 0.5 : 0) + Math.sin(t * 0.25 + obj.root.position.x) * 0.15;
-        obj.targetPitch = near ? -py * 0.08 : 0;
+        const hero = obj.spot === 'hero';
+        obj.targetYaw = (obj.product.yaw || 0) + px * (hero ? 0.45 : 0.25) + Math.sin(t * 0.3 + obj.root.position.x) * (hero ? 0.12 : 0.3);
+        obj.targetPitch = -py * (hero ? 0.06 : 0.1);
       } else if (performance.now() - this.lastInteraction > 5000 && this.mode === 'inspect') {
-        obj.userYaw += dt * 0.12; // slow turntable when left alone
+        obj.userYaw += dt * 0.12;
       }
-      if (obj.root.visible) obj.update(dt, t, cam);
+      obj.update(dt, t, cam);
     }
-    if (this.monument) {
-      this.monument.root.position.x = cam.position.x * 0.92;
-      this.monument.root.visible = cam.position.z > -6;
-      this.monument.targetYaw = -0.5 + t * 0.02 + px * 0.05;
+    if (this.monument?.root.visible) {
+      this.monument.targetYaw = -0.4 + t * 0.015 + px * 0.04;
       this.monument.update(dt, t, cam);
-    }
-    for (const g of this.collectionGroup.children) {
-      const o = g.userData.obj;
-      if (o) {
-        o.targetYaw = t * 0.3;
-        o.update(dt, t, cam);
-      }
     }
     if (this.voidObj) {
       this.voidObj.targetYaw = t * 0.35;
       this.voidObj.update(dt, t, this.voidCam);
     }
 
-    // pedestal lights
-    for (const [id, ped] of this.pedestals) {
-      const claimed = ped.claimed;
-      const level = claimed ? 0.25 : ped.level;
-      ped.ringMat.opacity += (level * (this.recommended === id ? 1 : 0.85) - ped.ringMat.opacity) * k;
-      ped.pool.material.opacity = ped.ringMat.opacity * 0.55;
-      if (this.recommended !== id) ped.beam.material.uniforms.uOpacity.value = 0.07 * ped.ringMat.opacity;
-    }
-
-    this.particles.update(dt, t);
-    this.grain.uniforms.uTime.value = t;
+    this.grade.uniforms.uTime.value = t;
     this.composer.render(dt);
   }
 }
 
-const _tmp = new THREE.Vector3();
+const _v = new THREE.Vector3();
+const _plane = new THREE.Plane();
+const _zAxis = new THREE.Vector3(0, 0, 1);

@@ -3,16 +3,50 @@
 
 const SHOE_SIZES = ['40', '41', '42', '43', '44'];
 
-export const ZONES = [
-  { id: 'motion', index: '01', name: 'MOTION', line: 'Shoes & movement', x: 0 },
-  { id: 'form', index: '02', name: 'FORM', line: 'Fashion, reduced', x: 17 },
-  { id: 'objects', index: '03', name: 'OBJECTS', line: 'Everyday, elevated', x: 34 },
-  { id: 'afterdark', index: '04', name: 'AFTER DARK', line: 'Limited pieces', x: 51 },
-  { id: 'collection', index: '05', name: 'YOUR COLLECTION', line: 'Everything you claimed', x: 68 },
+// Each collection is a world with its own light, palette and poster.
+// `x` is where the world sits along the store; the camera travels between them.
+export const WORLDS = [
+  {
+    id: 'motion', index: '01', name: 'MOTION', theme: 'canyon', x: 0,
+    kicker: 'CHAPTER 01 — SHOES & MOVEMENT',
+    title: 'MOTION',
+    line: 'Not the distance you run, but the ground you leave.',
+    note: 'Three objects shaped by wind and weight. Engineered knit, composite soles, one-piece forms — made for the ground, built to leave it.',
+  },
+  {
+    id: 'form', index: '02', name: 'FORM', theme: 'velvet', x: 70,
+    kicker: 'CHAPTER 02',
+    title: 'FORM',
+    sub: 'TAILORED OBJECTS',
+    line: 'Elegance, cut close to the body.',
+    note: 'Outerwear, leather and acetate, finished by hand. Quiet pieces for loud rooms.',
+  },
+  {
+    id: 'objects', index: '03', name: 'OBJECTS', theme: 'bluehour', x: 140,
+    kicker: 'Captivating',
+    title: 'OBJECTS',
+    sub: 'FOR EVERY HOUR',
+    line: 'Everyday things, made to be kept.',
+    note: 'A vessel, a watch, a sound. The things you touch most, reduced to what matters.',
+  },
+  {
+    id: 'afterdark', index: '04', name: 'AFTER DARK', theme: 'eclipse', x: 210,
+    kicker: 'DROP 001 — LIMITED',
+    title: 'AFTER DARK',
+    line: 'Released only when the light goes out.',
+    note: 'Obsidian, molten silver, smoked glass. Numbered pieces, released once.',
+  },
+  {
+    id: 'archive', index: '◈', name: 'THE ARCHIVE', theme: 'sediment', x: 280, hidden: true,
+    kicker: '◈ — THE ARCHIVE',
+    title: 'ARCHIVE',
+    line: 'Not everything is meant to be found.',
+    note: 'Prototypes, show pieces and objects that were never released. One of each.',
+  },
 ];
-
-// Archive sits behind the After Dark wall. It is not part of the zone rail.
-export const ARCHIVE = { id: 'archive', name: 'THE ARCHIVE', x: 51, z: -30 };
+export const worldById = Object.fromEntries(WORLDS.map((w) => [w.id, w]));
+// kept for older call sites
+export const ZONES = WORLDS.filter((w) => !w.hidden);
 
 const hs = (id, title, text, at, dir, extra = {}) => ({ id, title, text, at, dir, ...extra });
 
@@ -26,7 +60,7 @@ export const PRODUCTS = [
     colors: [
       { id: 'black', label: 'BLACK', hex: '#1b1b1c', delta: 0 },
       { id: 'white', label: 'WHITE', hex: '#ece9e3', delta: 0 },
-      { id: 'silver', label: 'SILVER', hex: '#c4c7cc', delta: 20, metal: 0.85 },
+      { id: 'silver', label: 'SILVER', hex: '#8f949b', delta: 20, metal: 0.55 },
     ],
     sizes: SHOE_SIZES,
     finishes: [
@@ -136,7 +170,7 @@ export const PRODUCTS = [
     sizes: ['38MM', '41MM'],
     sizeDelta: { '41MM': 30 },
     hotspots: [
-      hs('dial', 'DIAL', 'Pure black dial. No numerals.', [0.5, 0.75, 0.5], [0, 1, 0]),
+      hs('dial', 'DIAL', 'Pure black dial. No numerals.', [0.5, 0.55, 0.5], [0, 0, 1]),
       hs('case', 'CASE', 'Brushed steel case.', [0.25, 0.6, 0.5], [0, 0, 1]),
       hs('strap', 'STRAP', 'Textured rubber strap.', [0.85, 0.3, 0.5], [0, 0, 1]),
     ],
@@ -248,6 +282,16 @@ export const PRODUCTS = [
     related: ['a01', 'a02', 'o01'],
   },
 ];
+
+// Tripo exports every model with its front along +X; `face` turns it toward the viewer.
+// `yaw` is the resting three-quarter angle the object is shown at.
+const Q = Math.PI / 2;
+const FACE = { n01: Q, n02: Q, n03: -Q, f01: -Q, f02: Q, f03: Q, o01: 0, o02: -Q, o03: Q, d01: Q, d02: 0, d03: Q, a01: Q, a02: Q, a03: Q };
+const YAW = { n01: -0.45, n02: -0.45, n03: -0.5, d01: -0.45, a01: -0.45, f01: 0.3, f02: 0.35, f03: 0.25, o02: 0.2, o03: 0.35, d03: 0.35, a02: 0.3 };
+for (const p of PRODUCTS) {
+  p.face = FACE[p.id] ?? 0;
+  p.yaw = YAW[p.id] ?? 0.25;
+}
 
 export const byId = Object.fromEntries(PRODUCTS.map((p) => [p.id, p]));
 export const productsIn = (zone) => PRODUCTS.filter((p) => p.zone === zone).sort((a, b) => a.slot - b.slot);

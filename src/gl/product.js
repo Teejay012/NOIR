@@ -61,6 +61,9 @@ export class ProductObject {
     this.userYaw = 0;
     this.attention = 0;
     this.idle = true;
+    this.floatBase = 0.05;
+    this.floatAmp = 0.015;
+    this.floatSpeed = 1.1;
 
     this.model = this.#build(source);
     this.spin.add(this.model);
@@ -127,6 +130,7 @@ export class ProductObject {
 
   #normalise() {
     const p = this.product;
+    if (!this.billboard) this.model.rotation.y += p.face || 0;
     this.model.updateMatrixWorld(true);
     _box.setFromObject(this.model);
     const size = _box.getSize(new THREE.Vector3());
@@ -223,7 +227,7 @@ export class ProductObject {
     if (this.configurable) {
       const metal = color?.metal || 0;
       for (const m of this.materials) {
-        const to = { metalness: metal, roughness: finish.roughness * (metal ? 0.45 : 1) };
+        const to = { metalness: metal, roughness: metal ? Math.max(0.32, finish.roughness * 0.5) : finish.roughness };
         if (m.isMeshPhysicalMaterial) Object.assign(to, { clearcoat: finish.clearcoat, clearcoatRoughness: finish.clearcoatRoughness });
         if (animate) gsap.to(m, { ...to, duration: dur * 0.8, ease: 'power2.inOut' });
         else Object.assign(m, to);
@@ -245,7 +249,7 @@ export class ProductObject {
     this.yaw += (this.targetYaw + this.userYaw - this.yaw) * k;
     this.pitch += (this.targetPitch - this.pitch) * k;
     this.spin.rotation.set(this.pitch, this.yaw, 0, 'YXZ');
-    if (this.idle) this.float.position.y = 0.05 + Math.sin(t * 1.1 + this.root.position.x) * 0.015;
+    if (this.idle) this.float.position.y = this.floatBase + Math.sin(t * this.floatSpeed + this.root.position.x) * this.floatAmp;
     if (this.billboard && camera) {
       this.spin.rotation.set(0, Math.atan2(camera.position.x - this.root.position.x, camera.position.z - this.root.position.z), 0);
     }

@@ -1,5 +1,6 @@
 // Fallback for devices without WebGL: the same store, bag and checkout, as a quiet 2D gallery.
 import { ZONES, PRODUCTS, assetUrl, defaultConfig, priceOf, money } from '../data.js';
+// ZONES = the visible worlds
 import * as store from '../state.js';
 
 export function startLite(app) {
@@ -14,8 +15,8 @@ export function startLite(app) {
             const claimed = store.isClaimed(p.id);
             return `<button class="lite-card" type="button" data-lite="${p.id}" ${claimed || locked ? 'disabled' : ''}>
               <img alt="${p.code} ${p.name}" src="${assetUrl.image(p.id)}" style="${locked ? 'filter:brightness(0)' : ''}">
-              <p class="mono">${p.code} — ${p.name}</p>
-              <p class="mono">${locked ? 'LOCKED' : claimed ? 'SOLD' : `${money(priceOf(p, defaultConfig(p)))} · CLAIM`}</p></button>`;
+              <p>${p.code} — ${p.name}</p>
+              <p>${locked ? 'Locked' : claimed ? 'In your bag' : `${money(priceOf(p, defaultConfig(p)))} · Claim`}</p></button>`;
           })
           .join('')}</div>`;
       })
@@ -29,7 +30,7 @@ export function startLite(app) {
     if (!b) return;
     const p = PRODUCTS.find((x) => x.id === b.dataset.lite);
     store.claim(p.id, defaultConfig(p));
-    app.toast('ADDED TO YOUR COLLECTION');
+    app.toast('Added to your collection');
   });
   store.on(render);
   render();

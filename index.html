@@ -3,140 +3,167 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#050505" />
+    <meta name="theme-color" content="#0e2730" />
     <title>NOIR — The Store That You Explore</title>
     <meta name="description" content="NOIR — Shopping, reimagined as an experience. Don't browse the store. Enter it." />
     <meta property="og:title" content="NOIR — The Store That You Explore" />
     <meta property="og:description" content="Shopping, reimagined as an experience." />
     <meta property="og:image" content="/assets/img/hall.webp" />
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23050505'/%3E%3Cpath d='M9 23V9l14 14V9' stroke='%23ece9e3' stroke-width='2' fill='none'/%3E%3C/svg%3E" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230e2730'/%3E%3Ctext x='16' y='22' font-family='Georgia,serif' font-size='18' text-anchor='middle' fill='%23f3efe6'%3EN%3C/text%3E%3C/svg%3E" />
   </head>
-  <body class="is-arriving">
-    <canvas id="gl" aria-label="The NOIR showroom"></canvas>
+  <body class="is-arriving" data-world="motion">
+    <canvas id="gl" aria-label="The NOIR store"></canvas>
 
-    <!-- 01 — THE ARRIVAL -->
+    <!-- 01 — ARRIVAL -->
     <section id="arrival" aria-live="polite">
-      <p class="arrival-line" data-line="1"></p>
-      <p class="arrival-line" data-line="2"></p>
+      <div class="arrival-lines">
+        <p class="arrival-line" data-line="1"></p>
+        <p class="arrival-line" data-line="2"></p>
+      </div>
+      <div class="arrival-poster">
+        <p class="arrival-kicker">SS—27 · THE FLAGSHIP</p>
+        <h1 class="arrival-title" aria-label="NOIR"><span>N</span><span>O</span><span>I</span><span>R</span></h1>
+        <p class="arrival-tag">Shopping, reimagined as an experience.</p>
+      </div>
       <div class="arrival-foot">
-        <span class="mono arrival-progress">000</span>
-        <button class="enter" type="button" disabled>
-          <span>ENTER STORE</span>
-          <span class="enter-arrow" aria-hidden="true">↓</span>
-        </button>
-        <span class="mono arrival-meta">SS—27 / FLAGSHIP</span>
+        <span class="arrival-progress"><i></i></span>
+        <button class="enter pill" type="button" disabled>Enter the store <span aria-hidden="true">↓</span></button>
+        <span class="arrival-meta">Five worlds · Fifteen objects · One secret</span>
       </div>
     </section>
 
-    <!-- HUD -->
+    <!-- HEADER -->
     <header id="hud">
-      <button class="brand" type="button" data-action="home" aria-label="NOIR — back to the showroom">NOIR</button>
-      <div class="hud-zone" aria-live="polite">
-        <span class="mono hud-zone-index">01</span>
-        <span class="hud-zone-name">MOTION</span>
-      </div>
+      <button class="brand" type="button" data-action="home" aria-label="NOIR — back to the first world">NOIR</button>
+      <nav class="hud-worlds" aria-label="Worlds"></nav>
       <div class="hud-actions">
-        <button class="hud-drop mono" type="button" data-action="drop" aria-label="Go to the next drop">
-          <span class="hud-drop-label">NEXT DROP</span> <span class="hud-drop-time">00:07:42</span>
-        </button>
-        <button class="hud-link" type="button" data-action="collection">COLLECTION</button>
-        <button class="hud-link hud-bag" type="button" data-action="bag" aria-label="Open your bag">BAG <span class="mono bag-count">00</span></button>
-        <button class="hud-sound mono" type="button" data-action="sound" aria-pressed="false" aria-label="Toggle sound">
-          <span class="sound-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-        </button>
+        <button class="hud-drop" type="button" data-action="drop"><span class="hud-drop-dot"></span><span class="hud-drop-label">Next drop</span> <span class="hud-drop-time tnum">00:07:42</span></button>
+        <button class="hud-link" type="button" data-action="index">Index</button>
+        <button class="hud-link hud-bag" type="button" data-action="bag" aria-label="Open your bag">Bag <span class="bag-count tnum">00</span></button>
+        <button class="hud-sound" type="button" data-action="sound" aria-pressed="false" aria-label="Toggle sound"><span class="sound-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span></button>
       </div>
     </header>
 
-    <nav id="rail" aria-label="Showroom zones"></nav>
-    <p id="hint" class="mono">SCROLL, DRAG OR USE ← → TO MOVE</p>
-
-    <!-- hover / recommendation labels anchored to 3D objects -->
-    <div id="hover-label" aria-hidden="true">
-      <span class="mono hover-code"></span>
-      <span class="hover-cta">EXPLORE OBJECT</span>
-      <span class="mono hover-extra"></span>
-    </div>
-    <div id="rec-label" aria-hidden="true"><span class="rec-dot"></span><span class="mono">YOU MAY LIKE THIS</span></div>
-
-    <!-- zone overlays -->
-    <section id="drop-stage" aria-live="polite">
-      <p class="mono drop-kicker">AFTER DARK — DROP 001</p>
-      <p class="drop-title">NEXT DROP</p>
-      <button class="drop-time mono" type="button" aria-label="Hold to advance time">00 : 07 : 42</button>
-      <p class="mono drop-hint">HOLD THE CLOCK TO ADVANCE TIME</p>
-    </section>
-    <section id="drop-live"><p class="mono">THE COLLECTION IS LIVE</p></section>
-    <section id="collection-stage">
-      <p class="mono collection-kicker">05 — YOUR COLLECTION</p>
-      <p class="collection-title">Nothing claimed yet.</p>
-      <p class="mono collection-sub">EVERYTHING YOU CLAIM IS KEPT HERE.</p>
-      <div class="collection-actions"></div>
-    </section>
-    <section id="archive-stage">
-      <p class="mono archive-kicker">◈ — THE ARCHIVE</p>
-      <p class="archive-title">Not everything is meant to be found.</p>
-      <button class="ghost-btn" type="button" data-action="leave-archive">← RETURN TO THE STORE</button>
+    <!-- 02 — THE POSTER (one per world) -->
+    <section id="poster" aria-live="polite">
+      <div class="poster-head">
+        <p class="poster-kicker"></p>
+        <h2 class="poster-title"></h2>
+        <p class="poster-sub"></p>
+        <p class="poster-line"></p>
+      </div>
+      <div class="poster-badge">
+        <button class="badge-box" type="button" data-action="explore">
+          <span class="badge-code"></span><span class="badge-name"></span>
+        </button>
+        <p class="badge-meta"><span class="badge-price tnum"></span><span class="badge-status"></span></p>
+      </div>
+      <aside class="poster-note glass">
+        <p class="note-text"></p>
+        <button type="button" class="note-cta" data-action="explore"><span>Explore object</span><span class="arrow" aria-hidden="true">↗</span></button>
+      </aside>
+      <div class="poster-pager">
+        <button type="button" data-action="prev-object" aria-label="Previous object">‹</button>
+        <span class="pager-count tnum">01 / 03</span>
+        <button type="button" data-action="next-object" aria-label="Next object">›</button>
+      </div>
+      <p class="poster-hint">Scroll to travel · Drag the object · Click to explore</p>
     </section>
 
-    <!-- 04–07 — PRODUCT DISCOVERY -->
+    <!-- drop / archive overlays inside the poster -->
+    <section id="drop-stage">
+      <p class="drop-label">The drop opens in</p>
+      <button class="drop-time tnum" type="button" aria-label="Hold to advance time">00:07:42</button>
+      <p class="drop-hint">Hold the clock to advance time</p>
+    </section>
+    <section id="drop-live"><p>The collection is live.</p></section>
+
+    <!-- hover labels pinned to objects -->
+    <div id="hover-label" aria-hidden="true"><span class="hover-code"></span><span class="hover-cta">Explore</span></div>
+    <div id="rec-label" aria-hidden="true"><span class="rec-dot"></span>You may like this</div>
+
+    <!-- 04–07 — INSPECT -->
     <section id="inspect" aria-label="Object">
-      <button class="inspect-back ghost-btn" type="button" data-action="back">← SHOWROOM</button>
+      <button class="inspect-back pill ghost" type="button" data-action="back">← Back to the poster</button>
       <div class="inspect-info">
-        <p class="mono inspect-zone"></p>
-        <h1 class="inspect-code"></h1>
-        <p class="inspect-name"></p>
-        <p class="inspect-price mono"></p>
+        <p class="inspect-kicker"></p>
+        <h1 class="inspect-name"></h1>
+        <p class="inspect-code"></p>
         <p class="inspect-tagline"></p>
         <p class="inspect-desc"></p>
         <ol class="inspect-hotspots"></ol>
       </div>
-      <div class="inspect-config">
+      <div class="inspect-config glass">
         <div class="sheet-handle" aria-hidden="true"></div>
-        <p class="mono config-title">CONFIGURE</p>
+        <div class="config-head">
+          <p class="config-title">Configure</p>
+          <p class="inspect-price tnum"></p>
+        </div>
         <div class="config-groups"></div>
-        <p class="mono config-limited"></p>
-        <button class="claim" type="button"><span class="claim-label">CLAIM OBJECT</span><span class="mono claim-price"></span></button>
+        <p class="config-limited"></p>
+        <button class="claim pill solid" type="button"><span class="claim-label">Claim object</span><span class="claim-price tnum"></span></button>
         <div class="claimed-actions">
-          <button class="ghost-btn" type="button" data-action="bag">VIEW BAG</button>
-          <button class="ghost-btn" type="button" data-action="back">KEEP EXPLORING</button>
+          <button class="pill ghost" type="button" data-action="bag">View bag</button>
+          <button class="pill ghost" type="button" data-action="back">Keep exploring</button>
         </div>
       </div>
-      <button class="inspect-rec" type="button">
-        <span class="mono">YOU MAY LIKE THIS</span>
+      <button class="inspect-rec glass" type="button">
+        <span class="rec-kicker">You may like this</span>
         <span class="inspect-rec-name"></span>
-        <span aria-hidden="true">→</span>
+        <span aria-hidden="true" class="arrow">→</span>
       </button>
-      <p class="mono inspect-hint">DRAG TO ROTATE · SCROLL TO ZOOM · ESC TO RETURN</p>
+      <p class="inspect-hint">Drag to rotate · Scroll to zoom · Esc to return</p>
     </section>
     <div id="hotspots"></div>
-    <aside id="detail-card" aria-live="polite">
+    <aside id="detail-card" class="glass" aria-live="polite">
       <div class="detail-media"></div>
-      <p class="mono detail-index"></p>
+      <p class="detail-index tnum"></p>
       <p class="detail-title"></p>
       <p class="detail-text"></p>
-      <button class="ghost-btn" type="button" data-action="close-detail">CLOSE</button>
+      <button class="pill ghost" type="button" data-action="close-detail">Close</button>
     </aside>
+
+    <!-- THE INDEX (editorial grid) -->
+    <section id="index" aria-label="The index" aria-hidden="true">
+      <div class="index-inner">
+        <header class="index-head">
+          <div>
+            <p class="index-kicker">NOIR — SS27</p>
+            <h2 class="index-title">The <em>Index</em></h2>
+          </div>
+          <button class="pill ghost" type="button" data-action="close-index">Back to the store ✕</button>
+        </header>
+        <nav class="index-tabs" aria-label="Filter"></nav>
+        <div class="index-grid"></div>
+        <footer class="index-foot">
+          <div><strong>Free delivery</strong><span>On every order over $200</span></div>
+          <div><strong>Made to order</strong><span>Configured pieces ship in 5 days</span></div>
+          <div><strong>Numbered drops</strong><span>Limited runs, released after dark</span></div>
+          <div><strong>30-day returns</strong><span>Unworn, in original packaging</span></div>
+        </footer>
+      </div>
+    </section>
 
     <!-- 13 — THE BAG -->
     <aside id="bag" aria-label="Your bag" aria-hidden="true">
       <div class="bag-head">
-        <p class="bag-title">YOUR BAG</p>
-        <button class="ghost-btn" type="button" data-action="close-bag" aria-label="Close bag">CLOSE</button>
+        <p class="bag-title">Your <em>bag</em></p>
+        <button class="pill ghost" type="button" data-action="close-bag" aria-label="Close bag">Close ✕</button>
       </div>
       <div class="bag-scroll">
         <ul class="bag-items"></ul>
         <div class="bag-empty">
-          <p>Your bag is empty.</p>
-          <p class="mono">OBJECTS YOU CLAIM WILL APPEAR HERE.</p>
+          <p>Nothing claimed yet.</p>
+          <span>Objects you claim will appear here.</span>
         </div>
         <div class="bag-recs">
-          <p class="mono">YOU MAY ALSO LIKE</p>
+          <p class="bag-recs-title">You may also like</p>
           <div class="bag-recs-list"></div>
         </div>
       </div>
       <div class="bag-foot">
-        <div class="bag-total"><span class="mono">SUBTOTAL</span><span class="mono bag-subtotal">$0</span></div>
-        <button class="claim bag-checkout" type="button" data-action="checkout"><span class="claim-label">CHECKOUT</span><span class="mono">→</span></button>
+        <div class="bag-total"><span>Subtotal</span><span class="bag-subtotal tnum">$0</span></div>
+        <button class="claim pill solid bag-checkout" type="button" data-action="checkout"><span class="claim-label">Checkout</span><span>→</span></button>
       </div>
     </aside>
     <div id="scrim" data-action="close-bag"></div>
@@ -144,18 +171,17 @@
     <!-- 14 — CHECKOUT -->
     <section id="checkout" aria-label="Checkout"></section>
 
-    <!-- 15 — ORDER CONFIRMATION -->
+    <!-- 15 — OBJECT CLAIMED -->
     <section id="confirm" aria-live="polite">
-      <p class="confirm-title">OBJECT CLAIMED</p>
-      <p class="mono confirm-order"></p>
-      <p class="confirm-see">SEE YOU IN THE STORE.</p>
-      <button class="ghost-btn confirm-return" type="button" data-action="return-store">RETURN TO THE STORE</button>
+      <p class="confirm-kicker">Order confirmed</p>
+      <p class="confirm-title">Object <em>claimed.</em></p>
+      <p class="confirm-order tnum"></p>
+      <p class="confirm-see">See you in the store.</p>
+      <button class="pill ghost confirm-return" type="button" data-action="return-store">View your collection</button>
     </section>
 
     <div id="toast" role="status" aria-live="polite"></div>
-    <div id="cursor" aria-hidden="true"><span class="cursor-dot"></span><span class="cursor-ring"></span><span class="mono cursor-label"></span></div>
-
-    <!-- shown only when WebGL is unavailable -->
+    <div id="cursor" aria-hidden="true"><span class="cursor-dot"></span><span class="cursor-ring"></span><span class="cursor-label"></span></div>
     <section id="lite" hidden></section>
 
     <script type="module" src="/src/main.js"></script>
