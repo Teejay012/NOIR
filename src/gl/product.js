@@ -39,7 +39,6 @@ const FINISH = {
 };
 
 const _box = new THREE.Box3();
-const _v = new THREE.Vector3();
 const raycaster = new THREE.Raycaster();
 
 export class ProductObject {
@@ -284,4 +283,3 @@ export async function createProduct(product) {
   return obj;
 }
 
-export { _v as tmpVec };

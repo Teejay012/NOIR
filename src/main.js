@@ -72,9 +72,7 @@ class App {
     const l1 = returning ? 'WELCOME BACK TO NOIR' : 'WELCOME TO NOIR';
     const l2 = 'THE STORE IS OPEN.';
     const progress = $('.arrival-progress');
-    let loaded = 0;
     const loading = this.world.load((p) => {
-      loaded = p;
       progress.textContent = String(Math.round(p * 100)).padStart(3, '0');
     });
     await wait(700);
@@ -98,7 +96,6 @@ class App {
     enter.disabled = false;
     enter.classList.add('is-ready');
     this.canEnter = true;
-    void loaded;
   }
 
   async #type(el, text) {
